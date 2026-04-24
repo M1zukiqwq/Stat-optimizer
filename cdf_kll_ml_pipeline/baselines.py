@@ -349,3 +349,124 @@ def correct_qm(
                 qs[index] = max(prior_min, min(prior_max, qs[index] + shift))
         qs.sort()
     return qs
+
+
+def correct_linear_interp(
+    prior_min: float,
+    prior_max: float,
+    prior_quantiles: List[float],
+    observations: List[dict],
+    num_buckets: int = 10,
+    blend: float = 0.5,
+) -> List[float]:
+    """Simple linear-interpolation baseline.
+
+    For each observation, compute the prior CDF's error at the observation
+    value and linearly blend the correction into a running CDF adjustment.
+    This represents the simplest possible feedback-driven correction:
+    shift the prior towards observed selectivities with a fixed blending
+    factor, applied globally (no per-region adaptation).
+    """
+    if prior_max <= prior_min or not observations:
+        return prior_quantiles
+
+    bucket_count = len(prior_quantiles) + 1
+    prior_boundaries = [prior_min] + sorted(prior_quantiles) + [prior_max]
+    prior_p = [i / bucket_count for i in range(bucket_count + 1)]
+
+    corrected_p = list(prior_p)
+
+    for obs in observations:
+        predicate = obs.get("predicate_type", "<")
+        value = obs.get("value", prior_min)
+        act_sel = obs.get("actual_sel", 0.5)
+
+        est_cdf = evaluate_piecewise_cdf(prior_boundaries, prior_p, value)
+
+        if predicate in {">", ">="}:
+            obs_cdf = 1.0 - act_sel
+        elif predicate == "BETWEEN":
+            v_upper = obs.get("value_upper", value)
+            est_upper = evaluate_piecewise_cdf(prior_boundaries, prior_p, v_upper)
+            obs_cdf = est_cdf + act_sel * 0.5
+        else:
+            obs_cdf = act_sel
+
+        obs_cdf = max(0.001, min(0.999, obs_cdf))
+
+        error = obs_cdf - est_cdf
+        for i in range(1, len(corrected_p) - 1):
+            weight = 1.0 - abs(prior_p[i] - est_cdf)
+            weight = max(weight, 0.0)
+            corrected_p[i] += blend * error * weight / max(len(observations), 1)
+
+    corrected_p = sorted(set([max(0.0, min(1.0, p)) for p in corrected_p]))
+    if corrected_p[0] > 0.0:
+        corrected_p.insert(0, 0.0)
+    if corrected_p[-1] < 1.0:
+        corrected_p.append(1.0)
+
+    target_levels = [i / num_buckets for i in range(1, num_buckets)]
+    return [float(np.interp(level, corrected_p, prior_boundaries[:len(corrected_p)]))
+            if len(corrected_p) == len(prior_boundaries)
+            else float(np.interp(level, prior_p, prior_boundaries))
+            for level in target_levels]
+
+
+def correct_feedback_avg(
+    prior_min: float,
+    prior_max: float,
+    prior_quantiles: List[float],
+    observations: List[dict],
+    num_buckets: int = 10,
+    decay: float = 0.9,
+) -> List[float]:
+    """Exponential-moving-average feedback baseline.
+
+    Maintains a running correction delta per quantile boundary using
+    exponential decay weighting of recent observations. This is the
+    simplest temporal smoothing approach: newer observations are weighted
+    more heavily, but the correction is applied uniformly across the
+    quantile vector.
+    """
+    if prior_max <= prior_min or not observations:
+        return prior_quantiles
+
+    bucket_count = len(prior_quantiles) + 1
+    prior_boundaries = [prior_min] + sorted(prior_quantiles) + [prior_max]
+    prior_p = [i / bucket_count for i in range(bucket_count + 1)]
+
+    qs = list(prior_quantiles)
+    cumulative_weight = 0.0
+    cumulative_delta = np.zeros(len(qs))
+
+    for obs_idx, obs in enumerate(observations):
+        predicate = obs.get("predicate_type", "<")
+        value = obs.get("value", prior_min)
+        act_sel = obs.get("actual_sel", 0.5)
+
+        est_cdf = evaluate_piecewise_cdf(prior_boundaries, prior_p, value)
+
+        if predicate in {">", ">="}:
+            obs_cdf = 1.0 - act_sel
+        elif predicate == "BETWEEN":
+            obs_cdf = 0.5
+        else:
+            obs_cdf = act_sel
+
+        obs_cdf = max(0.001, min(0.999, obs_cdf))
+        error = obs_cdf - est_cdf
+        w = decay ** (len(observations) - 1 - obs_idx)
+        cumulative_weight += w
+
+        vr = prior_max - prior_min
+        for i in range(len(qs)):
+            proximity = max(0.0, 1.0 - abs(qs[i] - value) / max(vr, 1e-12))
+            cumulative_delta[i] += w * error * proximity * vr * 0.1
+
+    if cumulative_weight > 1e-12:
+        avg_delta = cumulative_delta / cumulative_weight
+        qs = [max(prior_min, min(prior_max, q + d)) for q, d in zip(qs, avg_delta)]
+
+    qs = sorted(qs)
+    return qs

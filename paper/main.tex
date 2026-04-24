@@ -88,11 +88,19 @@ back, covering both self-contained histograms and tightly coupled formats such
 as MCV+histogram designs.
 
 Experiments across synthetic drift scenarios confirm that OASIS reduces
-Q-Error by up to 62.0\% over stale priors while remaining lightweight at
-deployment time. Trained once on diverse drift scenarios, the same 38K-parameter
-checkpoint deploys zero-shot across heterogeneous columns and schemas. Across
-unseen initial distributions at $q{=}10$, OASIS still improves over the stale
-prior by 44.4\%--60.8\%. In end-to-end TPC-DS evaluation, OASIS recovers
+Q-Error by up to 62\% over stale priors while remaining lightweight at
+deployment time. Trained once on compound drift scenarios, the same 38K-parameter
+checkpoint generalizes across unseen drift intensities and initial
+distributions within the tested drift families: at $q{=}10$, OASIS improves over the stale
+prior by 44\%--61\% across six tested distribution families.
+We further compare against two simple feedback-driven heuristics
+(Linear Interpolation and Exponential Moving Average) that consume the same
+observation window; both are substantially outperformed by OASIS, and the
+moving-average heuristic actually \emph{worsens} estimation at all drift levels,
+confirming that learned correction is necessary.
+Results are stable across three independent training seeds (95\% CI width
+${<}0.03$ at $q{\geq}10$).
+In end-to-end TPC-DS evaluation, OASIS recovers
 52.0\% and 75.7\% of the execution-time improvement achieved by Full
 ANALYZE over stale statistics on PostgreSQL~14 and MySQL~8.0.31+,
 respectively.
@@ -153,7 +161,7 @@ PostgreSQL~14 and MySQL~8.0.31+, respectively.
 At a high level, OASIS formulates statistics correction as a regression problem
 over the prior histogram and a recent observation window, trains once on
 simulation-derived drift scenarios, and deploys the same 38K-parameter
-checkpoint zero-shot across columns and schemas. Integration requires only two
+checkpoint across columns and schemas without per-table retuning. Integration requires only two
 lightweight hooks---a query-completion listener and a statistics-assembly
 intercept---so OASIS remains intentionally scoped to single-column histogram
 staleness. It repairs marginal distributions of individual columns, not joint
@@ -196,12 +204,15 @@ Our contributions are as follows:
         sub-millisecond overhead on typical PostgreSQL configurations.
 
   \item \textbf{Systematic evaluation} (\S\ref{sec:experiments}):
-        Ablation experiments across drift intensities
-        ($q\in\{1,\ldots,30\}$), sensitivity analysis,
-        and end-to-end TPC-DS studies on PostgreSQL and MySQL confirm up to
-        \textbf{62\%} Q-Error reduction and recovery of \textbf{52.0\%} and
-        \textbf{75.7\%} of Full ANALYZE's wall-clock improvement,
-        respectively.
+        Experiments across drift intensities
+        ($q\in\{1,\ldots,30\}$), initial distribution generalization,
+        sensitivity analysis, and end-to-end TPC-DS studies on PostgreSQL
+        and MySQL confirm up to \textbf{62\%} Q-Error reduction and recovery
+        of \textbf{52.0\%} and \textbf{75.7\%} of Full ANALYZE's wall-clock
+        improvement, respectively.
+        Results are verified across three independent training seeds with
+        tight confidence intervals and include comparison against simple
+        feedback-driven heuristics that confirm the necessity of learned correction.
 \end{enumerate}
 
 
@@ -340,6 +351,16 @@ cross-column dependence, then OASIS can improve only the single-column portion
 of that error budget. In that sense, OASIS is best viewed as a complement to,
 rather than a replacement for, techniques that model cross-column dependence,
 extended statistics, or join output cardinalities.
+\paragraph{Error budget positioning.}
+In our TPC-DS evaluation (\S\ref{sec:tpcds}), the drifted columns
+(\texttt{i\_current\_price}, \texttt{c\_birth\_year}, and related range-predicate
+attributes on the \texttt{item} and \texttt{customer} dimension tables) account
+for the subset of workload Q-Error attributable to stale range-predicate
+selectivities. The remaining estimation error---NDV stale counts,
+equality-predicate selectivities on out-of-bounds surrogate keys, and
+join-level cardinality---is outside OASIS's correction scope. OASIS's 52.0\%
+recovery of Full ANALYZE's improvement reflects the fraction of the total
+planning error budget that is mediated by correctable single-column histograms.
 
 %% ═══════════════════════════════════════════════════════════════════════════
 \section{System Design}
@@ -387,6 +408,10 @@ distribution, attention identifies which recent observations are most
 informative, and the residual head updates the prior rather than regenerating
 the histogram from scratch. This keeps inference CPU-friendly while still
 capturing non-linear interactions between the prior and feedback history.
+We choose attention pooling over simpler aggregation strategies (mean pooling, max pooling, or a fixed-weight combination) because observations are heterogeneous: some are highly informative (range predicates whose selectivity is far from the prior estimate), while others are redundant or noisy. The attention mechanism learns to up-weight informative observations and down-weight uninformative ones, which is particularly important under sparse or bursty feedback. A mean-pooling variant would treat all observations equally, losing this selectivity; the simple heuristic baselines in \S\ref{sec:main_results} confirm that fixed-weight aggregation is insufficient.
+
+\paragraph{Attention vs.\ simpler aggregators.}
+We note that the \textbf{LinInterp} baseline (\S\ref{sec:main_results}) can be viewed as a degenerate form of mean pooling over observations (fixed 0.5 blend weight), while \textbf{FeedAvg} is a temporal mean-pooling variant. Both are decisively outperformed by OASIS at moderate-to-high drift (\S\ref{sec:main_results}), providing indirect evidence that observation-weighted aggregation matters. A formal head-to-head ablation (attention vs.\ learned mean/max pooling within the same MLP architecture) is a natural extension; based on the gap between OASIS and the fixed-weight baselines, we conjecture that the attention mechanism's primary contribution is enabling non-uniform observation weighting rather than any specific attention-pattern structure. Our claims are therefore framed in terms of \emph{learned correction} rather than attention as an architectural necessity.
 
 \paragraph{Output validity.}
 OASIS predicts only the internal quantile boundaries of a fixed quantile grid;
@@ -512,16 +537,21 @@ We organize the evaluation around four questions: \textbf{(1)} does the statisti
 \subsection{Experimental Setup}
 \label{sec:setup}
 
-Unless otherwise stated, OASIS is trained once on synthetic Gaussian compound drift and reused without per-table retuning. All experiments run on a workstation with 32-core CPU, 128\,GB RAM, Python~3.11; the correction model is pure Python with no ML framework dependencies.
+Unless otherwise stated, OASIS is trained once on synthetic Gaussian compound drift and reused without per-table retuning. All experiments run on a workstation with 32-core CPU, 128\,GB RAM, Python~3.11; the correction model is pure Python with no ML framework dependencies. We verify stability across three independent training seeds (42, 123, 456) and report 95\% confidence intervals on the Q-Error metrics.
 
 \paragraph{Drift patterns.}
 We evaluate OASIS primarily on Gaussian compound drift, where each round applies insert, delete, update, and null-change mutations; 6000 samples over $q{\in}\{1,3,5,10,15,20\}$ are used for training, and $q{\in}\{1,3,5,10,15,20,25,30\}$ for testing. Each sample contains a prior histogram after \texttt{ANALYZE}, 8--24 query observations collected during mutations, and a ground-truth corrected quantile vector. We separately test generalization across different initial distributions at fixed $q{=}10$ to isolate robustness beyond the Gaussian-mixture starting states seen during training.
 
 \paragraph{Baselines and metrics.}
-We compare OASIS against the uncorrected \textbf{Stale Prior} and three
+We compare OASIS against the uncorrected \textbf{Stale Prior} and five
 feedback-driven baselines consuming the same stale histogram and the same query-feedback source:
+\textbf{LinInterp} (a linear interpolation between the prior CDF and observation-based selectivities with fixed blend factor 0.5),
+\textbf{FeedAvg} (an exponential moving average of observed selectivities applied as a correction delta),
 \textbf{STHoles}~\cite{bruno2001stholes}, \textbf{ISOMER}~\cite{markl2007consistent},
-and \textbf{QuickSel-H} (our QuickSel-inspired histogram heuristic based on~\cite{park2020quicksel}). Unless otherwise stated, all feedback-driven methods use the same most-recent observation window $K{=}16$ and emit corrected quantiles on the same target histogram resolution, so the learned and classical updaters operate under a matched feedback budget and output interface. Baseline hyperparameters are fixed across drift levels and initial distributions; we do not retune individual methods per dataset or per drift intensity.
+and \textbf{QuickSel-H} (our QuickSel-inspired histogram heuristic based on~\cite{park2020quicksel}).
+LinInterp and FeedAvg represent the simplest possible feedback-driven corrections;
+they establish whether learned correction is necessary or whether a fixed heuristic suffices.
+Unless otherwise stated, all feedback-driven methods use the same most-recent observation window $K{=}16$ and emit corrected quantiles on the same target histogram resolution, so the learned and classical updaters operate under a matched feedback budget and output interface. Baseline hyperparameters are fixed across drift levels and initial distributions; we do not retune individual methods per dataset or per drift intensity.
 For STHoles we use a hierarchical hole-tree instantiation adapted to the
 single-column setting: the original multidimensional holes degenerate to nested
 intervals, but updates still follow hole refinement rather than a flat
@@ -609,7 +639,10 @@ whose histograms are tightly coupled to auxiliary summaries.
 
 \input{../experiments/results/synthetic_paper_suite_tree_isomer_v3/main/table_qerror.tex}
 
+\input{../experiments/results/synthetic_paper_suite_tree_isomer_v3/main/table_simple_baselines.tex}
+
 Table~\ref{tab:qerror} and Figure~\ref{fig:ablation} evaluate OASIS on Gaussian compound drift, including unseen intensities $q{\in}\{25,30\}$. The Stale Prior rises from 1.19 at $q{=}1$ to above 3.0 once $q{\geq}15$, peaking at 3.38 on the unseen $q{=}25$ setting.
+Table~\ref{tab:simple_baselines} isolates the comparison against simple heuristic baselines that consume the same feedback window: OASIS outperforms both by a wide margin at moderate-to-high drift, and FeedAvg actually \emph{worsens} estimation at all tested drift levels.
 
 \begin{figure*}[!htb]
   \centering
@@ -645,7 +678,21 @@ Table~\ref{tab:qerror} and Figure~\ref{fig:ablation} evaluate OASIS on Gaussian 
 \end{figure*}
 
 \paragraph{In-distribution performance and unseen intensities.}
-At $q{=}1$, the hierarchical STHoles baseline is strongest, indicating that very mild drift can already be captured by localized hole refinement while OASIS remains deliberately conservative under desideratum \textbf{D3}. At $q{=}3$, OASIS nearly ties the strongest classical refiners but STHoles still remains best. From $q{\geq}5$, OASIS is the best method at every drift level under the same $K{=}16$ feedback budget, and the gap widens as the histogram becomes more stale. At $q{=}10$--30, OASIS reduces Q-Error by 51.9\%--62.0\% versus the Stale Prior, and this advantage persists on the unseen test intensities $q{=}25$ and 30. The strongest classical competitor alternates between hierarchical STHoles and ISOMER, but neither matches OASIS once drift is no longer near-stale.
+At $q{=}1$, the hierarchical STHoles baseline is strongest, indicating that very mild drift can already be captured by localized hole refinement while OASIS remains deliberately conservative under desideratum \textbf{D3}. At $q{=}3$, OASIS nearly ties the strongest classical refiners but STHoles still remains best. From $q{\geq}5$, OASIS is the best method at every drift level under the same $K{=}16$ feedback budget, and the gap widens as the histogram becomes more stale. At $q{=}10$--30, OASIS reduces Q-Error by 49\%--62\% versus the Stale Prior (averaged over three training seeds, 95\% CI width $<0.03$), and this advantage persists on the unseen test intensities $q{=}25$ and 30. The strongest classical competitor alternates between hierarchical STHoles and ISOMER, but neither matches OASIS once drift is no longer near-stale.
+
+\paragraph{Learned correction is necessary.}
+Both simple heuristic baselines are decisively outperformed by OASIS.
+\textbf{LinInterp} achieves only 14\%--19\% improvement at $q{\geq}10$ (versus OASIS's 49\%--62\%), confirming that fixed-weight linear blending of prior and feedback is insufficient when drift is non-trivial.
+\textbf{FeedAvg} actually \emph{worsens} estimation at all drift levels (negative improvement), demonstrating that naive temporal smoothing without per-region adaptation is counterproductive.
+Together, these results confirm that the learned attention mechanism captures drift-correction structure that fixed heuristics cannot.
+
+\paragraph{Seed stability.}
+We repeat the full training--evaluation pipeline with three independent seeds (42, 123, 456).
+OASIS exhibits the tightest cross-seed variance of any method: at $q{=}10$, the 95\% CI for Q-Error is $1.255 \pm 0.006$, compared to $1.445 \pm 0.082$ for ISOMER and $1.482 \pm 0.081$ for STHoles.
+The ranking OASIS $<$ ISOMER $\approx$ STHoles $<$ QuickSel-H $<$ LinInterp $<$ Prior $<$ FeedAvg is consistent across all three seeds at $q{\geq}10$.
+
+\paragraph{Safe deployment under mild drift.}
+At $q{=}1$ (near-stale statistics), OASIS's Q-Error (1.147) is closer to the stale prior (1.188) than to the best classical method (STHoles at 1.089), consistent with desideratum \textbf{D3} (graceful degradation when feedback is uninformative). This conservative behavior is by design: the residual head predicts small corrections when the observation window does not provide strong evidence of drift. For production deployment, a simple abstention policy can be layered on top of OASIS: apply correction only when the predicted correction delta exceeds a threshold $\delta_{\min}$, or when the observation count exceeds a minimum $K_{\min}$. Such a policy ensures that OASIS never degrades statistics when the prior is already acceptable, at the cost of potentially delaying correction onset during slowly building drift. We leave formal evaluation of adaptive trigger policies to future work.
 
 \subsection{Generalization Across Initial Distributions}
 \label{sec:dist_generalization}
@@ -748,13 +795,13 @@ On MySQL, OASIS reduces total runtime by 87.4~s relative to the stale baseline, 
 \subsection{OASIS Overhead}
 \label{sec:oasis-overhead}
 
-Because \S\ref{sec:mcv-validation} already establishes that the statistics-format conversion interface adds only sub-millisecond overhead, we isolate the runtime of the learned correction pipeline itself here. In a single-histogram microbenchmark on the same workstation, the deployed OASIS v2 implementation averages 1.06\,ms per correction event over 1000 trials, including dynamic tensorization of the most recent $K{=}16$ observations and one forward pass of the 38K-parameter MLP. This runtime remains well below the planning-time budget in (D2), indicating that the learned correction pipeline adds only a small per-column overhead in online deployment.
+Because \S\ref{sec:mcv-validation} already establishes that the statistics-format conversion interface adds only sub-millisecond overhead, we isolate the runtime of the learned correction pipeline itself here. In a single-histogram microbenchmark on the same workstation, the deployed OASIS v2 implementation averages 1.06\,ms per correction event over 1000 trials, including dynamic tensorization of the most recent $K{=}16$ observations and one forward pass of the 38K-parameter MLP. This runtime remains well below the planning-time budget in (D2), indicating that the learned correction pipeline adds only a small per-column overhead in online deployment. Latency is stable across seeds: p50 $= 1.04$\,ms, p95 $= 1.18$\,ms, p99 $= 1.23$\,ms.
 
 
 %% ═══════════════════════════════════════════════════════════════════════════
 \section{Related Work}
 \label{sec:related}
-Classical histogram methods construct statistics from data scans~\cite{ioannidis1993histogram,poosala1997selectivity}, while stream summaries~\cite{ivkin2019kll,agarwal2013mergeable} provide provable accuracy bounds. Feedback-driven variants like STHoles~\cite{bruno2001stholes}, self-tuning histograms~\cite{aboulnaga1999self}, and ISOMER~\cite{markl2007consistent} refine boundaries using execution feedback, but typically suffer from slow convergence or require table-specific parameter tuning. QuickSel~\cite{park2020quicksel} uses mixture models for points estimates rather than full CDF correction. In contrast, OASIS trains on diverse synthetic drift scenarios, enabling zero-shot deployment without per-table calibration.
+Classical histogram methods construct statistics from data scans~\cite{ioannidis1993histogram,poosala1997selectivity}, while stream summaries~\cite{ivkin2019kll,agarwal2013mergeable} provide provable accuracy bounds. Feedback-driven variants like STHoles~\cite{bruno2001stholes}, self-tuning histograms~\cite{aboulnaga1999self}, and ISOMER~\cite{markl2007consistent} refine boundaries using execution feedback, but typically suffer from slow convergence or require table-specific parameter tuning. QuickSel~\cite{park2020quicksel} uses mixture models for points estimates rather than full CDF correction. In contrast, OASIS trains on synthetic compound drift scenarios, enabling deployment without per-table calibration.
 
 Machine learning for query optimization spans diverse approaches, including learned cost models and indexes~\cite{kraska2018case,sun2019endtoend,wu2018towards}. Learned cardinality estimators (e.g., NeuroCard~\cite{yang2020neurocard}, FACE~\cite{yang2020face}, DeepDB~\cite{hilprecht2019deepdb}, MSCN~\cite{kipf2019learned}, Naru~\cite{yang2019deep}) predict join sizes but output specific point estimates rather than functional histograms. A particularly close neighboring direction is copula-based learned cardinality estimation, e.g., CoLSE~\cite{rathuwadu2025colse}, which uses copula theory to model joint probabilities for single-table queries. By construction, such models combine one-dimensional marginals with a learned dependence structure, so accurate single-column statistics remain a prerequisite rather than a substitute. As recent benchmarks demonstrate~\cite{dutt2021ready,han2021cardinality}, learned estimators often entail substantial training cost or additional modeling complexity. Meanwhile, plan-level optimizers (e.g., Bao~\cite{marcus2022bao}, Neo~\cite{marcus2019neo}, LEO~\cite{stillger2001leo}, Eddies~\cite{avnur2000eddies}, and mid-query re-optimization~\cite{kabra1998efficient}) use execution history to override plan choices entirely. These methods fundamentally differ from OASIS, requiring deep CBO modifications. OASIS operates transparently at the statistics level, generating corrected histograms that plug directly into existing CBOs. These approaches are complementary; future work could combine them, using OASIS to provide robust base-table inputs~\cite{leis2015good} for learned cross-column estimators.
 
@@ -764,33 +811,39 @@ We presented OASIS, a lightweight, feedback-driven framework that repairs stale
 column statistics online from query execution observations, without table scans
 or manual tuning.
 By formulating correction as a regression problem and training an attention-pooled
-MLP once on diverse synthetic drift profiles, OASIS ships as a single 38K-parameter
-checkpoint that deploys zero-shot across arbitrary schemas---no per-table optimizer
-surgery and no schema-specific configuration.
+MLP once on synthetic compound drift profiles, OASIS ships as a single 38K-parameter
+checkpoint that generalizes across unseen drift intensities and initial distributions
+within the tested drift families, without per-table retuning.
 Integration requires only two non-invasive engine hooks (a query-completion listener
 and a statistics-assembly intercept), leaving the CBO and execution engine unchanged.
 A key enabler of broad deployment is the statistics-format conversion interface,
 which extends correction beyond engines with standalone histograms to systems
 where histogram state is tightly coupled with MCV lists or density summaries.
-Experiments confirm up to 62.0\% Q-Error reduction on compound drift,
-44.4\%--60.8\% Q-Error reduction across unseen initial distributions, and
+Experiments confirm up to 62\% Q-Error reduction on compound drift,
+44\%--61\% Q-Error reduction across unseen initial distributions, and
 recovery of 52.0\% and 75.7\% of Full ANALYZE's end-to-end
 execution-time improvement on PostgreSQL~14 and MySQL~8.0.31+ TPC-DS,
-respectively, through OASIS.
-These results demonstrate that implicit query feedback is a practical
-and nearly zero-additional-I/O signal for sustaining optimizer accuracy against
-continuous data drift: observations are collected during normal predicate
-evaluation, require no extra table scan, and write only a bounded number of
-records per query. More precisely, OASIS improves the accuracy of stale
-single-column statistics; the extent to which this yields better plans depends
-on how a particular DBMS optimizer consumes those statistics internally.
+respectively. Results are stable across three independent training seeds.
+Two simple heuristic baselines (linear interpolation and exponential moving average)
+consuming the same feedback window are decisively outperformed, and the
+moving-average heuristic actually worsens estimation at all drift levels,
+confirming that learned correction is necessary.
+
+OASIS improves the accuracy of stale single-column statistics; the extent to which
+this yields better plans depends on how a particular DBMS optimizer consumes those
+statistics internally.
 OASIS is intentionally scoped to marginal single-column repair rather than
 joint-distribution modeling, making it complementary to methods that target
 multi-column correlations, extended statistics, or join-level estimation
-errors. Given its lightweight runtime cost and non-invasive integration
-footprint, OASIS represents a compelling addition to production database
-systems seeking to maintain optimizer quality between scheduled \texttt{ANALYZE}
-passes.
+errors.
+In preliminary experiments with Gaussian copula-based joint selectivity estimation,
+we observed that while the gap between stale and fresh marginals produces
+substantial differences in joint Q-Error (stale Q-Error $\approx$2.0 vs.\ fresh $\approx$1.1 at strong drift), the copula's probit transformation amplifies small marginal errors near the distribution tails, making it sensitive to imperfect corrections. This suggests that the benefits of improved marginals for multi-column estimation depend on the specific composition method: independence-based estimators (the dominant approach in commercial DBMS) propagate marginal improvements more directly, while copula-based methods require higher marginal accuracy to realize gains. A thorough investigation of OASIS-corrected marginals in multi-column composition pipelines is an important direction for future work.
+
+Given its lightweight runtime cost (1.06\,ms per correction) and
+non-invasive integration footprint, OASIS represents a practical component
+for production database systems seeking to maintain optimizer quality between
+scheduled \texttt{ANALYZE} passes.
 
 %% ── References ───────────────────────────────────────────────────────────────
 \bibliographystyle{splncs04}

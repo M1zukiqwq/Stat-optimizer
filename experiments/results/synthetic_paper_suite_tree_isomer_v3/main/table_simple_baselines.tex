@@ -1,0 +1,19 @@
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Simple heuristic baselines vs.\ OASIS at selected drift intensities (mean over 3 training seeds). Both heuristics consume the same observation window $K{=}16$. FeedAvg worsens estimation at all drift levels.}
+  \label{tab:simple_baselines}
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{c | rrrr}
+    \toprule
+    & \multicolumn{4}{c}{Q-Error ($\downarrow$ better)} \\
+    \cmidrule(lr){2-5}
+    $q$ & Stale & LinInterp & FeedAvg & OASIS \\
+    \midrule
+    \textbf{ 5} & 1.791 & 1.628 & 1.835 & \textbf{1.238} \\
+    \textbf{10} & 2.471 & 2.118 & 2.565 & \textbf{1.255} \\
+    \textbf{20} & 3.370 & 2.749 & 3.553 & \textbf{1.296} \\
+    \textbf{30} & 3.500 & 2.823 & 3.690 & \textbf{1.345} \\
+    \bottomrule
+  \end{tabular}
+\end{table}

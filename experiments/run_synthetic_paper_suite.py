@@ -17,7 +17,7 @@ _PIPELINE_DIR = _REPO_DIR / "cdf_kll_ml_pipeline"
 if str(_PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(_PIPELINE_DIR))
 
-from baselines import correct_stholes_flat, correct_stholes_tree
+from baselines import correct_stholes_flat, correct_stholes_tree, correct_linear_interp, correct_feedback_avg
 from histogram_math import clamp01, evaluate_piecewise_cdf
 from histogram_types import KllFeedbackSample
 from json_histogram_parser import load_feedback_sample
@@ -27,7 +27,7 @@ from simulate_memory_kll_dataset import MemoryTable, _draw_observation
 from tensorizer import tensorize_sample
 
 
-METHODS = ["Prior", "STHoles", "QuickSel-H", "ISOMER", "OASIS"]
+METHODS = ["Prior", "LinInterp", "FeedAvg", "STHoles", "QuickSel-H", "ISOMER", "OASIS"]
 MAIN_Q_VALUES = [1, 3, 5, 10, 15, 20, 25, 30]
 TRAIN_Q_VALUES = [1, 3, 5, 10, 15, 20]
 DIST_TYPES = [
@@ -152,6 +152,30 @@ def method_boundaries(
 
     results: Dict[str, List[float]] = {"Prior": prior_boundaries}
     stholes_fn = correct_stholes_tree if stholes_mode == "tree" else correct_stholes_flat
+
+    try:
+        li_q = correct_linear_interp(
+            sample.prior.min_value,
+            sample.prior.max_value,
+            list(sample.prior.quantile_values),
+            observation_dicts,
+            num_buckets=num_buckets,
+        )
+        results["LinInterp"] = [sample.prior.min_value] + list(li_q) + [sample.prior.max_value]
+    except Exception:
+        results["LinInterp"] = prior_boundaries
+
+    try:
+        fa_q = correct_feedback_avg(
+            sample.prior.min_value,
+            sample.prior.max_value,
+            list(sample.prior.quantile_values),
+            observation_dicts,
+            num_buckets=num_buckets,
+        )
+        results["FeedAvg"] = [sample.prior.min_value] + list(fa_q) + [sample.prior.max_value]
+    except Exception:
+        results["FeedAvg"] = prior_boundaries
 
     try:
         stholes_q = stholes_fn(
@@ -379,12 +403,14 @@ def maybe_plot_main(summaries: Sequence[MethodSummary], figure_dir: Path) -> Non
     q_values = sorted({summary.q_mods for summary in summaries if summary.q_mods is not None})
     colors = {
         "Prior": "#e74c3c",
+        "LinInterp": "#95a5a6",
+        "FeedAvg": "#7f8c8d",
         "STHoles": "#3498db",
         "QuickSel-H": "#9b59b6",
         "ISOMER": "#f39c12",
         "OASIS": "#27ae60",
     }
-    markers = {"Prior": "o", "STHoles": "^", "QuickSel-H": "D", "ISOMER": "s", "OASIS": "v"}
+    markers = {"Prior": "o", "LinInterp": "P", "FeedAvg": "X", "STHoles": "^", "QuickSel-H": "D", "ISOMER": "s", "OASIS": "v"}
 
     def series(metric_name: str, method: str) -> List[float]:
         values = []

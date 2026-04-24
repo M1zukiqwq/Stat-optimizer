@@ -10,8 +10,8 @@
   Stale Prior:      300.951
   OASIS:            332.959  (-10.6% improvement)
   Col-Only ANALYZE: 317.929  (-5.6% improvement)
-  Full ANALYZE:     319.878
-  OASIS Recovery:   -3200834258.8% of Full ANALYZE improvement
+  Fresh/Oracle:     319.878
+  OASIS Recovery:   —% of fresh/oracle improvement
 
   ── Per-Predicate Breakdown ──
   OASIS improves:   127/180 (70.6%)
@@ -32,7 +32,7 @@
 
   ── Case Studies (Predicates with Plan Impact) ──
 
-  Top 5 Plan Wins (OASIS fixed plan-changing errors):
+  Top 5 Plan Wins (OASIS resolved potential plan-impact risk):
     1. [Q00] i_current_price = v=0.693: stale QE=11.52 → oasis QE=1.49 (actual sel=0.0027)
     2. [Q01] i_current_price < v=0.315: stale QE=2.46 → oasis QE=1.06 (actual sel=0.1663)
     3. [Q01] i_current_price < v=0.034: stale QE=1.58 → oasis QE=1.04 (actual sel=0.0115)

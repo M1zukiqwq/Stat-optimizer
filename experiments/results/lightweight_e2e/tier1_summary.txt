@@ -1,0 +1,47 @@
+======================================================================
+  LIGHTWEIGHT E2E EVALUATION SUMMARY
+======================================================================
+
+  Total queries evaluated: 60
+  Total predicates:        180
+  Columns:                 6
+
+  ── Aggregate Q-Error ──
+  Stale Prior:      300.951
+  OASIS:            332.959  (-10.6% improvement)
+  Col-Only ANALYZE: 317.929  (-5.6% improvement)
+  Full ANALYZE:     319.878
+  OASIS Recovery:   -3200834258.8% of Full ANALYZE improvement
+
+  ── Per-Predicate Breakdown ──
+  OASIS improves:   127/180 (70.6%)
+  Plan impact:
+    Wins:     38/180 (21.1%)
+    Neutral:  131/180 (72.8%)
+    Losses:   11/180 (6.1%)
+
+  ── Per-Column Summary ──
+  Column                #Pred   Stale   OASIS  ColANZ   Fresh  Recov%       W/N/L
+  ---------------------------------------------------------------------------
+  i_current_price          30  11.711   2.036   1.933   1.902   98.6%     10/18/2
+  c_birth_year             30   1.970   1.401   1.345   1.322   87.8%     13/15/2
+  d_date_sk                30 786.349 1104.263 1067.155 1086.691 -31791427915.3%      5/25/0
+  ss_quantity              30   2.708   3.858   2.573   2.563 -791.6%      1/24/5
+  i_rec_start_date         30 754.866 607.219 623.907 617.781  107.7%      5/25/0
+  c_rec_start_date         30 248.100 278.976 210.661 209.010  -79.0%      4/24/2
+
+  ── Case Studies (Predicates with Plan Impact) ──
+
+  Top 5 Plan Wins (OASIS fixed plan-changing errors):
+    1. [Q00] i_current_price = v=0.693: stale QE=11.52 → oasis QE=1.49 (actual sel=0.0027)
+    2. [Q01] i_current_price < v=0.315: stale QE=2.46 → oasis QE=1.06 (actual sel=0.1663)
+    3. [Q01] i_current_price < v=0.034: stale QE=1.58 → oasis QE=1.04 (actual sel=0.0115)
+    4. [Q02] i_current_price BETWEEN v=0.258: stale QE=2.08 → oasis QE=1.00 (actual sel=0.8566)
+    5. [Q03] i_current_price > v=0.620: stale QE=13.10 → oasis QE=1.44 (actual sel=0.0536)
+
+  Plan Losses (OASIS introduced errors):
+    1. [Q03] i_current_price BETWEEN v=0.484: stale QE=1.10 → oasis QE=2.94 (actual sel=0.2003)
+    2. [Q05] i_current_price = v=0.177: stale QE=1.07 → oasis QE=1.52 (actual sel=0.0046)
+    3. [Q01] c_birth_year > v=0.897: stale QE=1.21 → oasis QE=2.31 (actual sel=0.1210)
+
+======================================================================

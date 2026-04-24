@@ -1,0 +1,149 @@
+
+Strategy: stale_prior
+Database: imdb
+Timeout: 30s
+======================================================================
+  Skipping 33c (in skip list)
+Loaded 111 queries
+
+Current table statistics:
+======================================================================
+[1/111] Running 10a... ✓ 16972ms | ops=15 q-error=5.89
+[2/111] Running 10b... ✓ 4955ms | ops=16 q-error=8.84
+[3/111] Running 10c... ✓ 668ms | ops=17 q-error=195.97
+[4/111] Running 11a... ✓ 2750ms | ops=17 q-error=98.28
+[5/111] Running 11b... ✓ 805ms | ops=18 q-error=164.62
+[6/111] Running 11c... ✓ 558ms | ops=17 q-error=17.04
+[7/111] Running 11d... ✓ 452ms | ops=17 q-error=17.04
+[8/111] Running 12a... ✓ 667ms | ops=18 q-error=9.46
+[9/111] Running 12b... ✓ 2596ms | ops=20 q-error=270.15
+[10/111] Running 12c... ✓ 9305ms | ops=19 q-error=11.82
+[11/111] Running 13a... ✓ 1403ms | ops=23 q-error=161.40
+[12/111] Running 13b... ✓ 1652ms | ops=22 q-error=141.64
+[13/111] Running 13c... ✓ 1548ms | ops=22 q-error=141.64
+[14/111] Running 13d... ✓ 1806ms | ops=23 q-error=203.09
+[15/111] Running 14a... ✓ 5012ms | ops=17 q-error=31.24
+[16/111] Running 14b... ✓ 871ms | ops=17 q-error=28.78
+[17/111] Running 14c... ✓ 1029ms | ops=17 q-error=31.26
+[18/111] Running 15a... ✓ 1848ms | ops=18 q-error=36.73
+[19/111] Running 15b... ✓ 961ms | ops=18 q-error=36.20
+[20/111] Running 15c... ✓ 944ms | ops=19 q-error=37.65
+[21/111] Running 15d... ✓ 968ms | ops=19 q-error=45.01
+[22/111] Running 16a... ✓ 4576ms | ops=19 q-error=67.48
+[23/111] Running 16b... ✓ 9584ms | ops=19 q-error=45.69
+[24/111] Running 16c... ✓ 12191ms | ops=19 q-error=5.80
+[25/111] Running 16d... ✓ 7398ms | ops=19 q-error=6.21
+[26/111] Running 17a... ✓ 8580ms | ops=16 q-error=52.48
+[27/111] Running 17b... ✓ 7116ms | ops=16 q-error=41.34
+[28/111] Running 17c... ✓ 6425ms | ops=16 q-error=28.20
+[29/111] Running 17d... ✓ 7389ms | ops=16 q-error=55.79
+[30/111] Running 17e... ✓ 11259ms | ops=16 q-error=52.57
+[31/111] Running 17f... ✓ 12501ms | ops=16 q-error=51.47
+[32/111] Running 18a... ✓ 1938ms | ops=17 q-error=107.80
+[33/111] Running 18b... ✓ 5081ms | ops=13 q-error=34.42
+[34/111] Running 18c... ✓ 7597ms | ops=16 q-error=24.36
+[35/111] Running 19a... ✓ 1601ms | ops=22 q-error=17.27
+[36/111] Running 19b... ✓ 998ms | ops=19 q-error=49.75
+[37/111] Running 19c... ✓ 4191ms | ops=21 q-error=33.08
+[38/111] Running 19d... ✓ 1662ms | ops=23 q-error=62.19
+[39/111] Running 1a... ✓ 447ms | ops=12 q-error=6.30
+[40/111] Running 1b... ✓ 292ms | ops=12 q-error=23.59
+[41/111] Running 1c... ✓ 340ms | ops=12 q-error=6.96
+[42/111] Running 1d... ✓ 350ms | ops=12 q-error=23.59
+[43/111] Running 20a... ✓ 1390ms | ops=23 q-error=54.34
+[44/111] Running 20b... ✓ 462ms | ops=23 q-error=54.34
+[45/111] Running 20c... ✓ 395ms | ops=23 q-error=53.33
+[46/111] Running 21a... ✓ 2235ms | ops=19 q-error=110.34
+[47/111] Running 21b... ✓ 434ms | ops=21 q-error=56.68
+[48/111] Running 21c... ✓ 464ms | ops=19 q-error=122.84
+[49/111] Running 22a... ✓ 329ms | ops=23 q-error=24.49
+[50/111] Running 22b... ✓ 313ms | ops=23 q-error=24.49
+[51/111] Running 22c... ✓ 313ms | ops=23 q-error=24.81
+[52/111] Running 22d... ✓ 326ms | ops=24 q-error=55.70
+[53/111] Running 23a... ✓ 926ms | ops=24 q-error=70.93
+[54/111] Running 23b... ✓ 741ms | ops=24 q-error=90.80
+[55/111] Running 23c... ✓ 770ms | ops=24 q-error=70.93
+[56/111] Running 24a... ✓ 163ms | ops=28 q-error=321.61
+[57/111] Running 24b... ✓ 1126ms | ops=26 q-error=64.48
+[58/111] Running 25a... ✗ ERROR:  canceling statement due to statement timeout
+
+[59/111] Running 25b... ✓ 2478ms | ops=19 q-error=38.35
+[60/111] Running 25c... ✗ ERROR:  canceling statement due to statement timeout
+
+[61/111] Running 26a... ✓ 759ms | ops=28 q-error=55.42
+[62/111] Running 26b... ✓ 429ms | ops=27 q-error=36.71
+[63/111] Running 26c... ✓ 415ms | ops=29 q-error=51.61
+[64/111] Running 27a... ✓ 1701ms | ops=27 q-error=20.61
+[65/111] Running 27b... ✓ 1776ms | ops=29 q-error=5.18
+[66/111] Running 27c... ✓ 1343ms | ops=25 q-error=173.40
+[67/111] Running 28a... ✓ 1315ms | ops=32 q-error=18.75
+[68/111] Running 28b... ✓ 532ms | ops=32 q-error=11.60
+[69/111] Running 28c... ✓ 1584ms | ops=34 q-error=10.73
+[70/111] Running 29a... ✓ 1204ms | ops=40 q-error=44.99
+[71/111] Running 29b... ✓ 1620ms | ops=40 q-error=34.95
+[72/111] Running 29c... ✓ 5909ms | ops=39 q-error=65.59
+[73/111] Running 2a... ✓ 3879ms | ops=11 q-error=45.13
+[74/111] Running 2b... ✓ 1761ms | ops=11 q-error=42.70
+[75/111] Running 2c... ✓ 578ms | ops=11 q-error=28.41
+[76/111] Running 2d... ✓ 560ms | ops=11 q-error=46.68
+[77/111] Running 30a... ✓ 203ms | ops=28 q-error=58.95
+[78/111] Running 30b... ✓ 673ms | ops=27 q-error=126.22
+[79/111] Running 30c... ✗ ERROR:  canceling statement due to statement timeout
+
+[80/111] Running 31a... ✓ 7739ms | ops=29 q-error=24.79
+[81/111] Running 31b... ✗ ERROR:  canceling statement due to statement timeout
+
+[82/111] Running 31c... ✓ 15962ms | ops=29 q-error=24.79
+[83/111] Running 32a... ✓ 278ms | ops=14 q-error=6.71
+[84/111] Running 32b... ✓ 807ms | ops=14 q-error=20.48
+[85/111] Running 33a... ✓ 1275ms | ops=33 q-error=4.59
+[86/111] Running 33b... ✓ 241ms | ops=32 q-error=9.22
+[87/111] Running 3a... ✓ 2295ms | ops=9 q-error=11.75
+[88/111] Running 3b... ✓ 706ms | ops=9 q-error=104.64
+[89/111] Running 3c... ✓ 395ms | ops=9 q-error=7.66
+[90/111] Running 4a... ✓ 515ms | ops=12 q-error=9.03
+[91/111] Running 4b... ✓ 441ms | ops=11 q-error=12.97
+[92/111] Running 4c... ✓ 538ms | ops=12 q-error=8.56
+[93/111] Running 5a... ✓ 196ms | ops=10 q-error=36.68
+[94/111] Running 5b... ✓ 182ms | ops=9 q-error=47.00
+[95/111] Running 5c... ✓ 988ms | ops=12 q-error=16.41
+[96/111] Running 6a... ✓ 876ms | ops=11 q-error=5.19
+[97/111] Running 6b... ✓ 1102ms | ops=11 q-error=30.09
+[98/111] Running 6c... ✓ 249ms | ops=11 q-error=21.33
+[99/111] Running 6d... ✓ 433ms | ops=11 q-error=30.09
+[100/111] Running 6e... ✓ 250ms | ops=11 q-error=21.33
+[101/111] Running 6f... ✓ 382ms | ops=11 q-error=38.00
+[102/111] Running 7a... ✗ ERROR:  canceling statement due to statement timeout
+
+[103/111] Running 7c... ✓ 11049ms | ops=19 q-error=11.51
+[104/111] Running 8a... ✓ 3684ms | ops=15 q-error=20.40
+[105/111] Running 8b... ✓ 2293ms | ops=16 q-error=13.94
+[106/111] Running 8c... ✓ 3047ms | ops=18 q-error=8263.24
+[107/111] Running 8d... ✓ 4160ms | ops=18 q-error=8264.97
+[108/111] Running 9a... ✓ 5323ms | ops=16 q-error=10.11
+[109/111] Running 9b... ✓ 4045ms | ops=16 q-error=10.69
+[110/111] Running 9c... ✓ 5543ms | ops=17 q-error=2.63
+[111/111] Running 9d... ✓ 16313ms | ops=17 q-error=3.00
+
+✓ Results saved to results/job_full/stale_prior_results.json
+
+======================================================================
+Execution Summary:
+  Success: 106/111
+  Error:   5/111
+  Total time: 299.7s
+  Avg time: 2827ms
+
+Q-error Summary (106 queries with q-error data):
+  Per-query geometric mean:
+    Average: 204.70
+    Median:  34.95
+  Overall geometric mean: 33.80
+  Max q-error observed:   19965238.00
+  Total operators analyzed: 2049
+======================================================================
+
+Paper Table 7 Format:
+  106/111 queries succeeded
+  Total time: 299.7s
+  Mean Q-Error: 33.80

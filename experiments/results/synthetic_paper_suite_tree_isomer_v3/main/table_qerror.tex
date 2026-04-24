@@ -1,0 +1,25 @@
+\begin{table*}[!htb]
+  \centering
+  \small
+  \caption{Q-Error comparison across drift intensities ($\downarrow$ better). OASIS trained on $q \in \{1,3,5,10,15,20\}$ (6000 samples total). Bold = best per row; ``+\%'' = improvement over the stale prior.}
+  \label{tab:qerror}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{c | rr | rr | rr | rr | rr}
+    \toprule
+    & \multicolumn{2}{c|}{Stale Prior} & \multicolumn{2}{c|}{STHoles} & \multicolumn{2}{c|}{QuickSel-H} & \multicolumn{2}{c|}{ISOMER} & \multicolumn{2}{c}{OASIS (ours)} \\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+    $q$ & Q-Err & — & Q-Err & +\% & Q-Err & +\% & Q-Err & +\% & Q-Err & +\% \\
+    \midrule
+    \textbf{ 1} & 1.188 & — & \textbf{1.089} & \textbf{+8.3\%} & 1.193 & -0.5\% & 1.092 & +8.0\% & 1.147 & +3.4\% \\
+    \textbf{ 3} & 1.460 & — & \textbf{1.175} & \textbf{+19.5\%} & 1.331 & +8.9\% & 1.184 & +18.9\% & 1.185 & +18.9\% \\
+    \textbf{ 5} & 1.749 & — & 1.246 & +28.8\% & 1.478 & +15.5\% & 1.247 & +28.7\% & \textbf{1.213} & \textbf{+30.7\%} \\
+    \textbf{10} & 2.633 & — & 1.568 & +40.5\% & 1.996 & +24.2\% & 1.544 & +41.3\% & \textbf{1.267} & \textbf{+51.9\%} \\
+    \textbf{15} & 2.995 & — & 1.590 & +46.9\% & 2.053 & +31.5\% & 1.649 & +45.0\% & \textbf{1.338} & \textbf{+55.3\%} \\
+    \textbf{20} & 3.028 & — & 1.548 & +48.9\% & 2.048 & +32.4\% & 1.668 & +44.9\% & \textbf{1.262} & \textbf{+58.3\%} \\
+    \textbf{25} & 3.383 & — & 1.647 & +51.3\% & 2.216 & +34.5\% & 1.733 & +48.8\% & \textbf{1.285} & \textbf{+62.0\%} \\
+    \textbf{30} & 3.220 & — & 1.499 & +53.5\% & 1.962 & +39.1\% & 1.716 & +46.7\% & \textbf{1.255} & \textbf{+61.0\%} \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

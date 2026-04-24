@@ -1,0 +1,20 @@
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Q-Error across different initial distributions at $q{=}10$. A model trained only on Gaussian-mixture initial states remains best on all tested distributions.}
+  \label{tab:dist_generalization}
+  \resizebox{\columnwidth}{!}{%
+  \begin{tabular}{l r r r r r}
+    \toprule
+    Initial Distribution & Stale & STHoles & QuickSel-H & ISOMER & OASIS \\
+    \midrule
+    Gaussian Mixture & 2.497 & 1.453 & 1.845 & 1.493 & \textbf{1.262} \\
+    Uniform & 2.409 & 1.503 & 1.977 & 1.534 & \textbf{1.284} \\
+    Skewed (Power-law) & 3.517 & 1.679 & 2.202 & 1.609 & \textbf{1.379} \\
+    Bimodal & 2.488 & 1.554 & 2.069 & 1.462 & \textbf{1.276} \\
+    Triangular & 2.225 & 1.420 & 1.833 & 1.505 & \textbf{1.238} \\
+    Exponential & 3.097 & 1.592 & 2.141 & 1.593 & \textbf{1.292} \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table}

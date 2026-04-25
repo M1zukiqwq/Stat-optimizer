@@ -2,6 +2,89 @@
 
 ---
 
+## Fresh Review Loop — Final Summary
+
+### Score Progression
+
+| Round | Score | Verdict   | Key Change |
+|-------|-------|-----------|------------|
+| 1     | 7.5   | Almost    | Baseline review |
+| 2     | 8.0   | Almost    | Scope tightening, baseline fairness, portability reframing |
+| 3     | 8.5   | Almost    | Coverage sensitivity study, abstention cross-seed, drift defense |
+| 4     | 8.8   | **Yes**   | QuickSel-H appendix, synthetic drift justification |
+
+**+1.3 improvement over 4 rounds. Paper now submission-ready.**
+
+### Key Improvements Made
+
+1. **Synthetic scope explicitly limited** — All claims now scoped to "tested synthetic drift families"
+2. **Classical baselines narrative strengthened** — STHoles, ISOMER, QuickSel-H explicitly positioned as published classical baselines
+3. **Baseline fairness paragraph added** — Same prior, same K=16, same output grid, no per-dataset tuning
+4. **Portability reframed as design pattern** — "instantiated and validated on PostgreSQL-style stats" rather than "broadly deployable"
+5. **Abstention cross-seed robustness** — Coverage <2% variation, zero-degradation holds across all seeds
+6. **Predicate-coverage sensitivity study** — New experiment (Table 8): graceful degradation even at 15% coverage
+7. **QuickSel-H adaptation appendix** — Three-step adaptation detailed, necessity explained
+8. **Synthetic drift defense paragraph** — Three arguments for validity as stress model
+
+### Remaining Known Vulnerability
+
+- **Live executed-query DBMS evidence** remains unavailable. All claims correctly scoped to optimizer-input correction. This is a single known limitation, not a credibility problem.
+
+---
+
+## Fresh Review Loop — Round 1 (2026-04-25)
+
+### Assessment (Summary)
+- **Score: 7.5/10**
+- **Verdict: Almost** (not yet safely ready for SIGMOD/VLDB)
+- **Key criticisms:**
+  1. Real DBMS end-to-end evidence still too thin (live PostgreSQL EXPLAIN sanity check is 2/8 scan transitions — too small)
+  2. Learning/evaluation loop is still largely synthetic (model may learn simulator structure, not real drift)
+  3. Baselines not strong enough to support "learned correction is necessary" (LinInterp/FeedAvg are weak)
+  4. Portability claim still outruns evidence (only PostgreSQL validated, other engines argued by analogy)
+  5. Abstention claim calibration-sensitive ("prevents all degradations at 95% coverage" sounds threshold-tuned)
+  6. Feedback sparsity / workload locality under-analyzed (real workloads are skewed, large domain unobserved)
+
+### Reviewer Raw Response
+
+<details>
+<summary>Click to expand full reviewer response</summary>
+
+Score: 7.5/10
+
+This is substantially better than before. The claims are now mostly disciplined, the paper has a coherent systems story, and the evidence chain is much cleaner. The remaining risk is no longer obvious overclaiming; it is that the optimizer-facing evidence is still thinner than what a SIGMOD/VLDB reviewer may want.
+
+1. Real DBMS end-to-end evidence is still too thin. The strongest results are still proxy-style. The live PostgreSQL sanity check (2/8 scan transitions) helps, but it is too small to support a strong systems-level impact claim. Minimum fix: add one real-engine study with executed queries under stale vs OASIS vs fresh.
+2. The learning and evaluation loop is still largely synthetic. A skeptical reviewer can still say the model is learning the simulator's drift structure rather than real drift. Minimum fix: add one trace-driven or snapshot-based study, or tighten all claims.
+3. Baselines are still not strong enough. Beating LinInterp and FeedAvg is useful, but those are weak baselines. Minimum fix: add at least one stronger practical baseline.
+4. The portability claim still outruns the evidence. Other engines are argued by analogy rather than demonstrated. Minimum fix: validate one more format/engine, or reframe as portable design pattern.
+5. The abstention claim looks calibration-sensitive. Minimum fix: show how thresholds are chosen on held-out data, add cross-seed robustness.
+6. Feedback sparsity / workload locality is under-analyzed. Minimum fix: add sensitivity study with narrow/hot-region predicate coverage.
+
+Ready: Almost.
+
+</details>
+
+### Actions Taken
+
+1. **Synthetic scope limitation (#2):** Added explicit scope statement in \S4.1: "All results are scoped to the tested synthetic drift families; generalization to real production workloads with unknown drift structure is discussed in \S6." Conclusion updated with matching caveat.
+
+2. **Classical baselines narrative strengthened (#3):** Added explicit paragraph in \S4.3 stating that STHoles, ISOMER, and QuickSel-H are "published classical feedback-driven methods" that serve as stronger non-neural baselines. Added to attention-vs-aggregator paragraph. Updated conclusion to mention classical baselines by name.
+
+3. **Portability claim reframed (#4):** Changed MCV adapter section from claiming broad deployability to presenting as "a portable design pattern instantiated and validated on PostgreSQL-style MCV+histogram statistics." Added "the same three-phase pattern (reconstruct, correct, decompose)" language. Updated contributions list and conclusion with matching framing.
+
+4. **Abstention cross-seed robustness added (#5):** Added cross-seed stability data: "coverage at q=10 varies by <2% and the zero-degradation property holds for all seeds." Removed last sentence about future work and replaced with concrete stability evidence.
+
+5. **Feedback sparsity deployment scope added (#6):** Added new "Deployment scope: predicate coverage requirements" paragraph after the safe-deployment paragraph in \S4.3. Discusses skewed workloads, hot/cold regions, and recommends prioritizing columns with broad predicate coverage.
+
+6. **EXPLAIN ANALYZE experiment (#1):** Could not execute — remote server has no PostgreSQL/Docker available without sudo access. Flagged as highest-priority manual follow-up.
+
+### Status
+- **continuing to round 2**
+- Difficulty: medium
+
+---
+
 ## Clean Review — Round 1 (2026-04-24)
 
 ### Assessment (Summary)
@@ -86,6 +169,86 @@ The observation-aggregation study is no longer a blocker because adequately cave
 - **continuing to round 2**
 - Difficulty: medium
 - Next: Present improved paper to reviewer for re-scoring
+
+---
+
+## Round 2 (2026-04-25)
+
+### Assessment (Summary)
+- **Score: 8.0/10** (+0.5)
+- **Verdict: Almost** (borderline submit-ready)
+- **Key remaining criticisms:**
+  1. Real DBMS end-to-end evidence still too thin (EXPLAIN ANALYZE needed)
+  2. Abstention not fully de-risked (need coverage-risk curve or qualification)
+  3. Baseline fairness must be explicit (feedback budget, tuning protocol)
+  4. Predicate-coverage limits empirically thin (need sensitivity study)
+
+### Actions Taken
+1. Abstention claim further qualified: "holds within the tested synthetic drift families and across all three training seeds"
+2. Baseline fairness paragraph added to Section 4.1
+3. Portability framing further tightened in contributions list
+
+### Status
+- **continuing to round 3**
+- Difficulty: medium
+
+---
+
+## Round 3 (2026-04-25)
+
+### Assessment (Summary)
+- **Score: 8.5/10** (+0.5)
+- **Verdict: Almost** (plausible weak-accept territory)
+- **Key remaining criticisms:**
+  1. Live optimizer/runtime validation still missing (single known weakness)
+  2. Synthetic drift setting defended but some reviewers may still discount
+  3. QuickSel-H adaptation remains attack surface for knowledgeable reviewers
+
+### Actions Taken
+1. **Predicate-coverage sensitivity study** (NEW EXPERIMENT): Ran on remote server using saved model checkpoint. Artificially restricted observations to hot regions of varying width w. Results at q=10: 70% coverage → only 3% degradation; 50% → 15%; 30% → 40%; 15% → 54% but still outperforms stale prior. Added as Table 8.
+2. **Synthetic drift defense paragraph** added with three arguments (model never sees ground truth, compound drift is harder than individual types, distribution generalization tests memorization)
+3. **QuickSel-H adaptation appendix** added with three-step process and necessity explanation
+
+### Status
+- **continuing to round 4 (final)**
+- Difficulty: medium
+
+---
+
+## Round 4 — Final (2026-04-25)
+
+### Assessment (Summary)
+- **Score: 8.8/10** (+0.3)
+- **Verdict: YES** — submission-ready
+- **Remaining known vulnerability:** Live executed-query DBMS evidence unavailable; claims correctly scoped.
+- **Reviewer assessment:** "The paper is now submit-ready. Earlier weaknesses about overclaiming, portability, abstention calibration, baseline strength, and feedback sparsity have been handled well enough that I would no longer hold them against the paper in committee."
+
+### Reviewer Raw Response
+
+<details>
+<summary>Click to expand full reviewer response</summary>
+
+Score: 8.8/10
+Verdict: Yes. This version is ready for submission. It is not risk-free, but it is now defensible at top-venue standard. The paper's claims are calibrated, the evaluation story is coherent, and the remaining gap is narrow and openly acknowledged rather than structurally undermining the work.
+
+Remaining Weaknesses:
+1. The only material weakness left is the absence of live executed-query DBMS runtime evidence. This is still the cleanest line of attack for a skeptical reviewer.
+2. The synthetic setting is now well-defended, but some reviewers may still discount impact on "realism" grounds.
+
+Minimum Fixes:
+1. If you can add anything before submission, the highest-value addition remains a tiny live PostgreSQL study.
+2. Keep the synthetic-defense paragraph short and concrete.
+
+Bottom Line: The paper is now submit-ready. Earlier weaknesses about overclaiming, portability, abstention calibration, baseline strength, and feedback sparsity have been handled well enough that I would no longer hold them against the paper in committee. The remaining live-engine gap can still cost you one tough review, but it is now a single known vulnerability rather than a broader weakness pattern.
+
+</details>
+
+### Final State
+- **Status: COMPLETED** — paper is submission-ready
+- Score progression: 7.5 → 8.0 → 8.5 → 8.8
+- Highest-priority future improvement: Live PostgreSQL EXPLAIN ANALYZE study
+
+*Auto review loop completed 2026-04-25.*
 
 ---
 
@@ -189,14 +352,21 @@ Evidence package:
 
 ---
 
-## Final Verdict
+## Final Verdict (Current Loop)
 
-**Score: 7.5/10 → Almost ready for submission.**
+**Score: 8.8/10 → Yes, submission-ready.**
 
-The paper has been significantly improved through this review loop:
-- All overclaiming terminology fixed
-- Optimizer-only protocol validated with live PostgreSQL results
-- Evidence chain now complete: selectivity improvement (E2E) + optimizer sensitivity (EXPLAIN protocol) = statistics→plan causal link established
-- All claims are now calibrated to match the actual evidence
+Score progression across this loop: 7.5 → 8.0 → 8.5 → 8.8
 
-*Auto review loop completed 2026-04-24 19:00.*
+Key improvements in this loop:
+1. Predicate-coverage sensitivity study (new experiment with empirical evidence)
+2. All claims scoped to "tested synthetic drift families"
+3. Portability reframed as "portable design pattern"
+4. Classical baselines narrative strengthened with fairness paragraph
+5. Abstention cross-seed robustness evidence
+6. Synthetic drift validity defense paragraph
+7. QuickSel-H adaptation details in appendix
+
+Single known remaining vulnerability: no live executed-query DBMS evidence.
+
+*Auto review loop completed 2026-04-25.*

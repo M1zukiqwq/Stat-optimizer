@@ -42,7 +42,7 @@ more general.
 
 \subsection{PostgreSQL Instantiation}
 
-\subsection{Problem Formulation}
+\subsubsection{Problem Formulation}
 
 Given PostgreSQL statistics:
 \begin{itemize}
@@ -55,7 +55,7 @@ Given PostgreSQL statistics:
 Construct a canonical full distribution $\mathcal{F}$ that exposes the complete
 non-null column distribution to OASIS.
 
-\subsection{Phase 1: Reconstruction}
+\subsubsection{Phase 1: Reconstruction}
 
 \begin{algorithm}[H]
 \caption{Reconstruct Canonical Full Distribution from PostgreSQL Statistics}
@@ -87,14 +87,14 @@ non-MCV mass. Before tensorization, the interface evaluates the CDF of
 $\mathcal{F}$ at OASIS's fixed quantile levels, yielding the canonical quantile
 vector consumed by the model.
 
-\subsection{Phase 2: OASIS Correction}
+\subsubsection{Phase 2: OASIS Correction}
 
 Once reconstructed, the canonical full distribution is passed unchanged to the
 standard OASIS correction pipeline. The important systems property is that the
 model itself remains ignorant of the source database format; all engine-specific
 handling is localized to the conversion interface.
 
-\subsection{Phase 3: Decomposition}
+\subsubsection{Phase 3: Decomposition}
 
 Given a corrected full distribution $\mathcal{F}' = (\mathcal{S}', \mathcal{R}')$,
 reconstruct PostgreSQL-compatible statistics:
@@ -131,7 +131,7 @@ reconstruct PostgreSQL-compatible statistics:
 \end{algorithmic}
 \end{algorithm}
 
-\subsection{MCV Selection Policy}
+\subsubsection{MCV Selection Policy}
 
 The MCV threshold $\tau$ and limit $K$ control the final decomposition:
 \begin{itemize}
@@ -163,7 +163,7 @@ for heterogeneous optimizer statistics architectures.
 
 \subsection{Consistency Guarantees}
 
-\subsection{Probability Mass Conservation}
+\subsubsection{Probability Mass Conservation}
 
 \begin{theorem}[Probability Conservation]
 If the source statistics satisfy the non-null invariant
@@ -182,7 +182,7 @@ bounds, so the output MCV mass and residual mass partition the same corrected
 non-null mass. Therefore the invariant is preserved.
 \end{proof}
 
-\subsection{Approximate Idempotence}
+\subsubsection{Approximate Idempotence}
 
 \begin{definition}[Approximate Idempotence]
 Let $(\mathcal{M}', \mathcal{H}') = \mathrm{Decompose}(\mathrm{Reconstruct}(\mathcal{M}, \mathcal{H}), \tau, K)$. The conversion interface is $\epsilon$-idempotent if the round trip preserves total non-null mass within $\epsilon$ and preserves the residual quantile function within $\epsilon$ over a fixed evaluation grid.
@@ -236,7 +236,7 @@ main text and is intended to be kept numerically consistent with
 
 \subsection{Performance Considerations}
 
-\subsection{Time Complexity}
+\subsubsection{Time Complexity}
 
 \begin{itemize}
     \item \textbf{Reconstruction}: $O(k + n)$ where $k = |\mathcal{M}|$ and $n = |\mathcal{H}|$
@@ -244,7 +244,7 @@ main text and is intended to be kept numerically consistent with
     \item \textbf{Total overhead}: negligible relative to correction and well within planning-time constraints in our PostgreSQL validation
 \end{itemize}
 
-\subsection{Space Complexity}
+\subsubsection{Space Complexity}
 
 The canonical full distribution is temporary and small:
 \[

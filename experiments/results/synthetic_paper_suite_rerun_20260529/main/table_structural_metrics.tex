@@ -1,0 +1,25 @@
+\begin{table*}[!htb]
+  \centering
+  \small
+  \caption{Quantile MAE and Selectivity MAE across drift intensities from the clean synthetic rerun. Bold denotes best method per metric.}
+  \label{tab:mae}
+  \setlength{\tabcolsep}{3pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{c | rrrrr | rrrrr}
+    \toprule
+    & \multicolumn{5}{c|}{Quantile MAE ($\downarrow$)} & \multicolumn{5}{c}{Selectivity MAE ($\downarrow$)} \\
+    \cmidrule(lr){2-6}\cmidrule(lr){7-11}
+    $q$ & Prior & STHoles & QSel-H & ISOMER & OASIS & Prior & STHoles & QSel-H & ISOMER & OASIS \\
+    \midrule
+    \textbf{ 1} & 0.043 & 0.027 & 0.036 & \textbf{0.023} & 0.041 & 0.038 & 0.024 & 0.031 & \textbf{0.020} & 0.035 \\
+    \textbf{ 3} & 0.106 & 0.064 & 0.071 & \textbf{0.047} & 0.048 & 0.095 & 0.057 & 0.064 & \textbf{0.040} & 0.042 \\
+    \textbf{ 5} & 0.145 & 0.085 & 0.094 & 0.057 & \textbf{0.054} & 0.131 & 0.077 & 0.085 & 0.051 & \textbf{0.048} \\
+    \textbf{10} & 0.208 & 0.115 & 0.126 & 0.080 & \textbf{0.055} & 0.190 & 0.105 & 0.114 & 0.072 & \textbf{0.049} \\
+    \textbf{15} & 0.230 & 0.119 & 0.128 & 0.094 & \textbf{0.062} & 0.203 & 0.104 & 0.113 & 0.083 & \textbf{0.054} \\
+    \textbf{20} & 0.237 & 0.115 & 0.127 & 0.102 & \textbf{0.052} & 0.214 & 0.104 & 0.115 & 0.091 & \textbf{0.046} \\
+    \textbf{25} & 0.248 & 0.116 & 0.131 & 0.095 & \textbf{0.053} & 0.223 & 0.104 & 0.118 & 0.084 & \textbf{0.046} \\
+    \textbf{30} & 0.231 & 0.103 & 0.111 & 0.103 & \textbf{0.049} & 0.204 & 0.091 & 0.098 & 0.090 & \textbf{0.042} \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

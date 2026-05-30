@@ -1,0 +1,27 @@
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Representative PostgreSQL plan changes caused by corrected statistics. Each row is a query where stale statistics disagree with fresh statistics and OASIS-Proj matches the fresh plan shape.}
+  \label{tab:postgres_plan_examples}
+  \setlength{\tabcolsep}{3pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{llllrrrl}
+    \toprule
+    Family & Predicate & True & Method & Est. rows & Row QE & Root & Plan summary \\
+    \midrule
+    Join + dimension filter & le\_0.045 & 14 & Stale & 8292 & 592.3 & Nested Loop & Nested Loop: Nested Loop:Inner; Bitmap Heap Scan:dim; Bitmap Index Scan:dim\_payload\_idx... \\
+    Join + dimension filter & le\_0.045 & 14 & OASIS-Proj & 686 & 49.0 & Hash Join & Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact\_x\_idx; Bitmap... \\
+    Join + dimension filter & le\_0.045 & 14 & Fresh & 95 & 6.8 & Hash Join & Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact\_x\_idx; Bitmap... \\
+    \addlinespace
+    Selection & le\_0.045 & 128 & Stale & 55041 & 430.0 & Seq Scan & Seq Scan: Seq Scan:fact \\
+    Selection & le\_0.045 & 128 & OASIS-Proj & 4543 & 35.5 & Bitmap Heap Scan & Bitmap Heap Scan: Bitmap Heap Scan:fact; Bitmap Index Scan:fact\_x\_idx \\
+    Selection & le\_0.045 & 128 & Fresh & 590 & 4.6 & Bitmap Heap Scan & Bitmap Heap Scan: Bitmap Heap Scan:fact; Bitmap Index Scan:fact\_x\_idx \\
+    \addlinespace
+    Join & bt\_0.13\_0.2 & 14073 & Stale & 144 & 97.7 & Nested Loop & Nested Loop: Nested Loop:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact\_x\_idx; In... \\
+    Join & bt\_0.13\_0.2 & 14073 & OASIS-Proj & 13886 & 1.0 & Hash Join & Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact\_x\_idx; Seq Sc... \\
+    Join & bt\_0.13\_0.2 & 14073 & Fresh & 14023 & 1.0 & Hash Join & Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact\_x\_idx; Seq Sc... \\
+    \addlinespace
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

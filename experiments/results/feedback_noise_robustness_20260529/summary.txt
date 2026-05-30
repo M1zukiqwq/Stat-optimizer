@@ -1,0 +1,38 @@
+Feedback-noise robustness
+==================================
+Noise perturbs only feedback selectivities.
+
+Noise  Method          SelQE  JoinReg  JoinOpt  RiskResolved
+----------------------------------------------------------------------
+0.00   stale           2.868   1.1807     79.4%           0.0%
+0.00   isomer          1.677   1.0610     89.1%          53.9%
+0.00   oasis           1.755   1.0590     89.4%          62.6%
+0.00   oasis_projected 1.528   1.0461     90.9%          67.6%
+0.00   hybrid          1.512   1.0434     91.2%          65.8%
+0.00   fresh           1.000   1.0000    100.0%         100.0%
+       Hybrid choices: isomer=39.8%, oasis=13.5%, oasis_projected=43.8%, stale=2.9%
+
+0.02   stale           2.868   1.1807     79.4%           0.0%
+0.02   isomer          1.677   1.0615     89.0%          53.9%
+0.02   oasis           1.749   1.0593     89.4%          62.7%
+0.02   oasis_projected 1.533   1.0456     90.9%          67.7%
+0.02   hybrid          1.525   1.0450     90.9%          65.1%
+0.02   fresh           1.000   1.0000    100.0%         100.0%
+       Hybrid choices: isomer=39.3%, oasis=12.5%, oasis_projected=44.8%, stale=3.4%
+
+0.05   stale           2.868   1.1807     79.4%           0.0%
+0.05   isomer          1.711   1.0662     88.6%          51.9%
+0.05   oasis           1.753   1.0595     89.3%          62.5%
+0.05   oasis_projected 1.550   1.0460     90.8%          67.8%
+0.05   hybrid          1.535   1.0460     90.7%          64.7%
+0.05   fresh           1.000   1.0000    100.0%         100.0%
+       Hybrid choices: isomer=40.4%, oasis=14.3%, oasis_projected=42.4%, stale=2.9%
+
+0.10   stale           2.868   1.1807     79.4%           0.0%
+0.10   isomer          1.779   1.0726     87.9%          48.8%
+0.10   oasis           1.765   1.0602     89.3%          62.4%
+0.10   oasis_projected 1.580   1.0484     90.5%          67.1%
+0.10   hybrid          1.565   1.0483     90.5%          63.9%
+0.10   fresh           1.000   1.0000    100.0%         100.0%
+       Hybrid choices: isomer=35.9%, oasis=18.2%, oasis_projected=42.4%, stale=3.4%
+

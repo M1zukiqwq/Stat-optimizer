@@ -1,0 +1,174 @@
+{
+  "prior_kll": {
+    "type": "double",
+    "k": 1024,
+    "min": 0.0,
+    "max": 1.0,
+    "null_fraction": 0.039385,
+    "quantile_levels": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "quantile_values": [
+      0.136054,
+      0.228746,
+      0.342807,
+      0.43775,
+      0.510807,
+      0.571077,
+      0.626024,
+      0.678687,
+      0.742244
+    ],
+    "bucket_boundaries": [
+      0.0,
+      0.136054,
+      0.228746,
+      0.342807,
+      0.43775,
+      0.510807,
+      0.571077,
+      0.626024,
+      0.678687,
+      0.742244,
+      1.0
+    ],
+    "sketch_bytes_base64": "eyJmb3JtYXQiOiJwcmVzdG8tY2RmLXNpbXVsYXRpb24ta2xsLXYxIiwidHlwZSI6ImRvdWJsZSIsIm1pbiI6MC4wLCJtYXgiOjEuMCwiayI6MTAyNCwicXVhbnRpbGVfbGV2ZWxzIjpbMC4xLDAuMiwwLjMsMC40LDAuNSwwLjYsMC43LDAuOCwwLjldLCJxdWFudGlsZV92YWx1ZXMiOlswLjEzNjA1Mzk0Mzc5OTgwMjA3LDAuMjI4NzQ1NTU2ODEyODgzODMsMC4zNDI4MDY1NzY5MTM1NzY0NywwLjQzNzc1MDQxODkxOTEzNzQ2LDAuNTEwODA3MTYyMTA0MjQzNiwwLjU3MTA3NzQyMTY0NzM5OTksMC42MjYwMjM4MjcxNjQ4ODMzLDAuNjc4Njg3NDI2MTc2OTY2NCwwLjc0MjI0MzkwMjM3NzMxN119"
+  },
+  "observations": [
+    {
+      "predicate_type": "<",
+      "value": 0.990158,
+      "estimated_sel": 0.956947,
+      "actual_sel": 0.941331,
+      "timestamp": "2026-02-03T10:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.132027,
+      "estimated_sel": 0.36601,
+      "actual_sel": 0.323194,
+      "timestamp": "2026-02-03T11:00:00Z",
+      "value_upper": 0.494776
+    },
+    {
+      "predicate_type": ">=",
+      "value": 0.249044,
+      "estimated_sel": 0.751396,
+      "actual_sel": 0.791104,
+      "timestamp": "2026-02-03T12:00:00Z"
+    },
+    {
+      "predicate_type": "<=",
+      "value": 0.419379,
+      "estimated_sel": 0.365658,
+      "actual_sel": 0.288401,
+      "timestamp": "2026-02-03T13:00:00Z"
+    },
+    {
+      "predicate_type": "<=",
+      "value": 0.690058,
+      "estimated_sel": 0.785678,
+      "actual_sel": 0.642258,
+      "timestamp": "2026-02-03T14:00:00Z"
+    },
+    {
+      "predicate_type": "=",
+      "value": 0.410565,
+      "estimated_sel": 0.020235,
+      "actual_sel": 0.008242,
+      "timestamp": "2026-02-03T15:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.719251,
+      "estimated_sel": 0.07021,
+      "actual_sel": 0.279492,
+      "timestamp": "2026-02-03T16:00:00Z",
+      "value_upper": 0.837385
+    },
+    {
+      "predicate_type": ">=",
+      "value": 0.524875,
+      "estimated_sel": 0.457885,
+      "actual_sel": 0.657679,
+      "timestamp": "2026-02-03T17:00:00Z"
+    },
+    {
+      "predicate_type": "<=",
+      "value": 0.337928,
+      "estimated_sel": 0.284076,
+      "actual_sel": 0.168628,
+      "timestamp": "2026-02-03T18:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.280417,
+      "estimated_sel": 0.153729,
+      "actual_sel": 0.092775,
+      "timestamp": "2026-02-03T19:00:00Z",
+      "value_upper": 0.441647
+    },
+    {
+      "predicate_type": ">",
+      "value": 0.670001,
+      "estimated_sel": 0.207968,
+      "actual_sel": 0.519227,
+      "timestamp": "2026-02-03T20:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.828105,
+      "estimated_sel": 0.007304,
+      "actual_sel": 0.019996,
+      "timestamp": "2026-02-03T21:00:00Z",
+      "value_upper": 0.847705
+    }
+  ],
+  "corrected_kll": {
+    "type": "double",
+    "k": 1024,
+    "quantile_levels": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "quantile_values": [
+      0.24053,
+      0.436579,
+      0.570697,
+      0.650842,
+      0.691695,
+      0.720169,
+      0.743844,
+      0.769131,
+      0.801625
+    ],
+    "bucket_boundaries": [
+      0.0,
+      0.24053,
+      0.436579,
+      0.570697,
+      0.650842,
+      0.691695,
+      0.720169,
+      0.743844,
+      0.769131,
+      0.801625,
+      1.0
+    ]
+  }
+}

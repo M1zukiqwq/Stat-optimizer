@@ -1,0 +1,19 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Feedback-budget sensitivity in the optimizer-decision proxy. All methods see only the $K$ most recent feedback observations; OASIS uses the same fixed-width checkpoint with padding. Values are geometric means over all held-out predicates.}
+  \label{tab:feedback_budget_sensitivity}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{crrrrrrrrr}
+    \toprule
+    $K$ & Stale QE & ISOMER QE & OASIS QE & Proj QE & Hybrid QE & OASIS JoinOpt & Proj JoinOpt & Hybrid JoinOpt & Hybrid choice \\
+    \midrule
+    2 & 2.867 & 2.083 & 2.873 & 2.233 & 2.233 & 81.2\% & 84.2\% & 84.6\% & ISOMER 27\%, OASIS-Proj 57\%, OASIS 14\%, Stale 1\% \\
+    4 & 2.867 & 1.797 & 2.479 & 1.895 & 1.854 & 83.9\% & 87.2\% & 87.8\% & ISOMER 28\%, OASIS-Proj 60\%, OASIS 11\%, Stale 1\% \\
+    8 & 2.867 & 1.678 & 2.051 & 1.631 & 1.584 & 87.2\% & 89.9\% & 90.4\% & ISOMER 34\%, OASIS-Proj 53\%, OASIS 12\%, Stale 1\% \\
+    16 & 2.867 & 1.664 & 1.760 & 1.518 & 1.504 & 89.5\% & 91.1\% & 91.2\% & ISOMER 37\%, OASIS-Proj 47\%, OASIS 14\%, Stale 2\% \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

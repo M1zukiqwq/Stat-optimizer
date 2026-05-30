@@ -1,0 +1,22 @@
+Generator-driven optimizer decision proxy
+================================================
+No wall-clock runtime is measured. Regret is true proxy cost
+of the plan selected from estimated statistics divided by
+the true optimal proxy cost under the same cost model.
+
+Rows per method: 24576
+
+Method          SelQE  JoinReg  JoinOpt  FreshMatch  RiskResolved  QEImp  RegImp
+--------------------------------------------------------------------------------------
+stale           2.867   1.1871     79.0%        79.0%           0.0%    0.0%     0.0%
+isomer          1.664   1.0625     88.8%        88.8%          54.3%   42.0%    10.5%
+oasis           1.760   1.0563     89.5%        89.5%          63.0%   38.6%    11.0%
+oasis_projected 1.519   1.0421     91.1%        91.1%          69.0%   47.0%    12.2%
+hybrid          1.504   1.0409     91.1%        91.1%          66.8%   47.5%    12.3%
+fresh           1.000   1.0000    100.0%       100.0%         100.0%   65.1%    15.8%
+
+Hybrid choices:
+  isomer: 40.4%
+  oasis: 12.9%
+  oasis_projected: 44.8%
+  stale: 2.0%

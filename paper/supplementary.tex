@@ -10,6 +10,12 @@
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+\let\REQUIRE\Require
+\let\ENSURE\Ensure
+\let\STATE\State
+\let\FOR\For
+\let\ENDFOR\EndFor
+\let\RETURN\Return
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{microtype}
@@ -60,15 +66,19 @@
 \maketitle
 
 This document collects supplementary materials for the paper
-``OASIS: Feedback-Driven Statistics Correction for Cost-Based Query Optimizers.''
+``OASIS: Feedback-Driven Marginal Statistics Correction for Cost-Based Query Optimizers.''
 It provides detailed scope and error-budget positioning (\S\,A),
+including the marginal-to-joint composition boundary,
 model architecture and instrumentation details (\S\,B),
 baseline fairness discussion and QuickSel-H adaptation (\S\,C),
-the portable statistics-format conversion interface with PostgreSQL MCV instantiation (\S\,D),
+the PostgreSQL-style statistics-format adapter and conversion protocol (\S\,D),
 predicate-coverage sensitivity analysis (\S\,E),
 observation aggregation study details (\S\,F),
-optimizer-only EXPLAIN protocol details (\S\,G),
-and detailed overhead breakdowns (\S\,H).
+PostgreSQL planner-only statistics-injection protocol details (\S\,G),
+OOD drift realism protocol (\S\,H),
+benchmark-inspired DML trace protocol (\S\,I),
+feedback-budget, feedback-noise, and deployment-safety diagnostic protocols
+(\S\,J), and detailed overhead breakdowns (\S\,K).
 
 %% ═════════════════════════════════════════════════════════════════════════════
 \section{Scope and Error Budget}
@@ -108,6 +118,19 @@ prerequisite: learned multi-column estimators (e.g., copula-based models like
 CoLSE~\cite{rathuwadu2025colse}) combine one-dimensional marginals with a
 learned dependence structure, making single-column statistics quality a
 foundational concern.
+
+\paragraph{Marginal-to-joint composition boundary.}
+The multi-column composition experiments in the main paper should be interpreted
+as downstream use of corrected marginals, not as evidence that OASIS estimates
+correlations. The independence estimator uses the maximum-entropy joint
+distribution implied by the supplied marginals, while the Gaussian-copula
+estimator receives a fixed dependence structure. In this setting, plain OASIS
+marginals improve the joint estimator only modestly and inconsistently because
+they are not always feedback-consistent on the current observation window.
+OASIS-Proj is therefore a deployment calibration layer: it starts from the
+learned OASIS marginal correction, then applies a feedback-consistency
+projection before the marginal is passed to the downstream multi-column
+estimator. The core contribution remains single-column statistics correction.
 
 %% ═════════════════════════════════════════════════════════════════════════════
 %% Include the existing appendix files
@@ -219,47 +242,158 @@ observation window contains heterogeneous predicates of varying
 selectivity and informativeness.
 
 %% ═════════════════════════════════════════════════════════════════════════════
-\section{Optimizer-Only EXPLAIN Protocol Details}
+\section{PostgreSQL Planner-Only Statistics-Injection Protocol}
 \label{sec:optimizer-protocol-app}
 %% ═════════════════════════════════════════════════════════════════════════════
 
-The optimizer-only evaluation protocol uses PostgreSQL's \texttt{EXPLAIN}
-(without \texttt{ANALYZE}) to validate the statistics$\rightarrow$plan causal
-link. \texttt{EXPLAIN} invokes the full optimizer pipeline---parsing, rewriting,
-planning, and cost estimation---but never executes the query, making it safe
-for repeated invocation on production systems.
+The planner-only evaluation protocol uses PostgreSQL's \texttt{EXPLAIN}
+(without \texttt{ANALYZE}) to validate the
+statistics$\rightarrow$estimated-cardinality$\rightarrow$plan-shape path.
+\texttt{EXPLAIN} invokes PostgreSQL's optimizer and cost model, but it does not
+execute the query. The protocol therefore provides optimizer-facing evidence
+without making wall-clock runtime claims.
 
 \paragraph{Protocol steps.}
 \begin{enumerate}
-  \item Create a synthetic table with 200K rows and known distribution.
-  \item Run \texttt{ANALYZE} to capture fresh statistics.
-  \item Apply controlled DML mutations to create drift.
-  \item For each test query, run \texttt{EXPLAIN} under three statistics states:
-        \textbf{(a)} stale (pre-mutation statistics),
-        \textbf{(b)} fresh (post-mutation statistics captured by re-running
-        \texttt{ANALYZE}),
-        \textbf{(c)} OASIS-corrected (stale statistics with quantile boundaries
-        replaced by OASIS predictions).
-  \item Compare plan structures: scan types, join methods, join order.
+  \item Create a synthetic PostgreSQL schema with a fact table and dimension
+        table. The fact table stores the current post-drift data.
+  \item Generate stale and fresh single-column distributions for
+        \texttt{fact.x}; build ISOMER, OASIS, OASIS-Proj, and Hybrid corrected
+        marginal statistics from the same feedback window.
+  \item For each statistics state, create an analyzed one-column source table
+        and copy its typed \texttt{pg\_statistic} row into the target
+        \texttt{fact.x} statistics entry. This avoids hand-writing
+        PostgreSQL's \texttt{anyarray} catalog fields.
+  \item For each test query, obtain true cardinality using \texttt{COUNT(*)}
+        and obtain PostgreSQL estimated rows and plan shape using
+        \texttt{EXPLAIN (FORMAT JSON)}.
+  \item Compare row-estimation Q-error, plan-shape match to the
+        fresh-statistics planner, recovery of stale/fresh plan disagreements,
+        and new deviations from fresh when stale already matched fresh.
 \end{enumerate}
 
 \paragraph{Results.}
-On a TPC-DS-style scenario with extreme drift ($q \gg 10$):
+The formal batch covers 12 configurations: two drift directions
+(\texttt{left\_shift} and \texttt{right\_shift}), two fact-table sizes
+(100K and 200K rows), and three random seeds. Each configuration evaluates
+84 scan/join query templates under each statistics state. No query runtime is
+measured.
+
 \begin{itemize}
-  \item 8 queries tested, 2/8 (25\%) showed scan-type transitions
-        (Index Scan $\rightarrow$ Bitmap Heap Scan) when switching from stale
-        to fresh statistics.
-  \item OASIS-corrected statistics produced the same scan-type transitions
-        as fresh statistics in both cases, confirming that the CBO's plan
-        selection responds to the corrected quantile boundaries.
-  \item Planning cost: $<5$\,ms per \texttt{EXPLAIN} invocation.
+  \item Stale statistics produce aggregate row Q-error 27.748 and match the
+        fresh-statistics plan shape on 56.0\% of queries.
+  \item Plain OASIS reduces row Q-error to 3.306 and recovers 91.7\% of
+        stale/fresh plan-shape disagreements, but introduces new plan
+        deviations in 13.8\% of cases where stale statistics already matched
+        fresh.
+  \item OASIS-Proj reduces row Q-error to 2.360, matches the fresh-statistics
+        plan shape on 96.1\% of queries, recovers 92.6\% of stale/fresh plan
+        disagreements, and reduces new plan deviations to 1.1\%.
+  \item Across configurations, OASIS-Proj has mean row Q-error
+        $2.375\pm0.275$, close to ISOMER's $2.372\pm0.283$ and below plain
+        OASIS's $3.313\pm0.228$.
 \end{itemize}
 
 This protocol validates the causal chain
-$\text{statistics correction} \rightarrow \text{selectivity change}
- \rightarrow \text{cost re-estimation} \rightarrow \text{plan change}$
-without requiring query execution, making it suitable for production-safe
-plan-impact validation.
+$\text{statistics correction} \rightarrow \text{estimated rows}
+ \rightarrow \text{cost re-estimation} \rightarrow \text{plan shape}$
+inside a real PostgreSQL optimizer, while intentionally avoiding runtime
+claims that would depend on executor, cache, and system effects outside the
+single-column statistics layer.
+
+\input{../experiments/results/postgres_planner_stats_injection_batch_20260529/table_postgres_plan_examples.tex}
+
+Table~\ref{tab:postgres_plan_examples} gives representative plan-shape changes
+from the batch. These examples are not used as runtime evidence. They show the
+mechanism that the planner-only experiment is intended to validate: stale
+statistics can move estimated rows enough to select a different root operator
+or join strategy, while OASIS-Proj moves the estimated rows and plan shape back
+toward the fresh-statistics planner.
+
+%% ═════════════════════════════════════════════════════════════════════════════
+\section{OOD Drift Realism Protocol}
+\label{sec:ood-drift-app}
+%% ═════════════════════════════════════════════════════════════════════════════
+
+The OOD drift realism suite evaluates the same OASIS checkpoint used in the
+main synthetic experiments. The checkpoint is trained only on the compound drift
+generator; no samples from the OOD families are used for retraining or
+hyperparameter tuning. Each OOD case follows the same causal protocol as the
+main synthetic suite: capture stale quantiles, interleave drift steps with 16
+feedback observations, compute final post-drift quantiles, and evaluate future
+selectivity estimates against the final distribution.
+
+The six OOD families are deployment-inspired patterns implemented in
+\path{extended_drift_generators.py}: batch loading, range shift, skew
+evolution, outlier burst, multimodal drift, and seasonal/mixed drift. The
+reported table uses 128 held-out cases per family, $B=10$ histogram buckets,
+and 64 future CDF probe points per case. This experiment is not intended to
+prove that the simulator is a production DML trace; it tests whether OASIS and
+OASIS-Proj remain useful when the drift mechanism differs from the training
+generator.
+
+%% ═════════════════════════════════════════════════════════════════════════════
+\section{Benchmark-Inspired DML Trace Protocol}
+\label{sec:trace-drift-app}
+%% ═════════════════════════════════════════════════════════════════════════════
+
+The trace-grounded sanity check is not a production-log experiment. It
+constructs explicit DML event streams whose table/column stories are anchored
+to analytical benchmark maintenance patterns: append-heavy sales dates,
+promotion price revisions, inventory restocking, returns and cancellations,
+customer segment churn, and seasonal mixed maintenance. Values are normalized
+to the unit interval so that the same single-column correction interface is
+used as in the synthetic and OOD experiments.
+
+Each trace case begins with a stale histogram, then executes 16 DML steps. Each
+step emits concrete insert, update, and delete counts and then records one
+predicate feedback observation against the current post-step table. The
+reported run uses 96 cases per trace, $B=10$ histogram buckets, and 64 future
+CDF probe points per case. The same OASIS checkpoint trained on compound drift
+is used unchanged; no trace-specific retraining or hyperparameter tuning is
+performed.
+
+\input{../experiments/results/trace_grounded_drift_20260529/table_trace_grounded_drift.tex}
+
+The table should be interpreted as a realism sanity check rather than a claim
+that the traces match a particular deployment. Its main role is to expose a
+useful boundary: OASIS-Proj and Hybrid consistently improve over stale
+statistics, while plain OASIS can regress on mild update-heavy traces where
+feedback consistency is more valuable than learned global extrapolation.
+
+%% ═════════════════════════════════════════════════════════════════════════════
+\section{Feedback Budget, Feedback Noise, and Safety Diagnostics}
+\label{sec:feedback-sensitivity-app}
+%% ═════════════════════════════════════════════════════════════════════════════
+
+The feedback-budget experiment truncates each held-out sample to the $K$ most
+recent observations, with $K\in\{2,4,8,16\}$. The trained OASIS checkpoint is
+not retrained for smaller budgets; instead, the truncated window is padded to
+the checkpoint's native 16-slot tensor width. ISOMER, OASIS-Proj, and Hybrid
+receive the same truncated observation window, so the comparison isolates the
+effect of feedback availability.
+
+The feedback-noise experiment perturbs only the observed actual selectivities
+in the feedback window. It applies multiplicative log-normal noise with
+$\sigma\in\{0,0.02,0.05,0.10\}$, keeps stale priors and fresh future
+selectivities fixed, and evaluates the same generator-driven
+optimizer-decision proxy used in the main paper. The reported diagnostic uses
+64 held-out cases per drift intensity and one noise seed, because noisy
+projection constraints are more expensive than the clean-feedback setting.
+
+Both diagnostics are optimizer-facing rather than runtime-facing. The scan and
+join decisions are selected from estimated selectivities under a fixed cost
+proxy, then scored by true proxy cost using the generated post-drift
+distribution. The purpose is to characterize deployment sensitivity, not to
+claim wall-clock speedups.
+
+The deployment-safety table in the main paper is derived from cached outputs of
+four diagnostics: PostgreSQL planner-only batch summaries, feedback-budget
+sensitivity, feedback-noise robustness, and the benchmark-inspired DML trace
+sanity check. It does not introduce an oracle selector. Projection uses only the
+current feedback window, and Hybrid chooses among stale, ISOMER, OASIS, and
+OASIS-Proj by minimizing feedback-window residual. The table is generated by
+\path{experiments/deployment_safety_analysis.py}.
 
 %% ═════════════════════════════════════════════════════════════════════════════
 \section{Detailed Overhead Breakdown}

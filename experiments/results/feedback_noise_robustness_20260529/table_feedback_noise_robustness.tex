@@ -1,0 +1,19 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Feedback-noise robustness in the optimizer-decision proxy. Noise is multiplicative log-normal perturbation applied only to observed feedback selectivities; future predicates and true selectivities remain unchanged. Values are geometric means over 64 held-out cases per drift intensity and one noise seed.}
+  \label{tab:feedback_noise_robustness}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lrrrrrrrr}
+    \toprule
+    Noise & Stale QE & ISOMER QE & OASIS QE & Proj QE & Hybrid QE & OASIS JoinOpt & Proj JoinOpt & Hybrid JoinOpt \\
+    \midrule
+    0\% & 2.868 & 1.677 & 1.755 & 1.528 & 1.512 & 89.4\% & 90.9\% & 91.2\% \\
+    2\% & 2.868 & 1.677 & 1.749 & 1.533 & 1.525 & 89.4\% & 90.9\% & 90.9\% \\
+    5\% & 2.868 & 1.711 & 1.753 & 1.550 & 1.535 & 89.3\% & 90.8\% & 90.7\% \\
+    10\% & 2.868 & 1.779 & 1.765 & 1.580 & 1.565 & 89.3\% & 90.5\% & 90.5\% \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

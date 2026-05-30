@@ -1,0 +1,38 @@
+{
+  "output_root": "/Volumes/QUQ/Stat-optimizer/experiments/results/synthetic_paper_suite_rerun_20260529",
+  "args": {
+    "output_root": "results/synthetic_paper_suite_rerun_20260529",
+    "suites": [
+      "main"
+    ],
+    "seed": 42,
+    "num_buckets": 10,
+    "max_observations": 16,
+    "train_samples_per_q": 1000,
+    "test_samples_per_q": 128,
+    "sensitivity_train_samples_per_q": 200,
+    "sensitivity_test_q": 10,
+    "k_values": [
+      4,
+      8,
+      16,
+      32
+    ],
+    "distribution_q": 10,
+    "distribution_cases": 200,
+    "initial_rows": 5000,
+    "stholes_mode": "flat",
+    "train_lr": 0.0003,
+    "train_epochs": 150,
+    "train_alpha": 0.0001,
+    "activation_clip": 10.0,
+    "attention_score_clip": 20.0,
+    "parameter_clip": 2.0,
+    "force_retrain": false
+  },
+  "completed": [
+    "main"
+  ],
+  "main_summary_file": "/Volumes/QUQ/Stat-optimizer/experiments/results/synthetic_paper_suite_rerun_20260529/main/summary.json",
+  "figure_dir": "/Volumes/QUQ/Stat-optimizer/experiments/results/synthetic_paper_suite_rerun_20260529/figures"
+}

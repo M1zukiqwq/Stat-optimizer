@@ -1,0 +1,151 @@
+{
+  "prior_kll": {
+    "type": "double",
+    "k": 1024,
+    "min": 0.0,
+    "max": 1.0,
+    "null_fraction": 0.050332,
+    "quantile_levels": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "quantile_values": [
+      0.416429,
+      0.462921,
+      0.495881,
+      0.522011,
+      0.545598,
+      0.571366,
+      0.599977,
+      0.629668,
+      0.674099
+    ],
+    "bucket_boundaries": [
+      0.0,
+      0.416429,
+      0.462921,
+      0.495881,
+      0.522011,
+      0.545598,
+      0.571366,
+      0.599977,
+      0.629668,
+      0.674099,
+      1.0
+    ],
+    "sketch_bytes_base64": "eyJmb3JtYXQiOiJwcmVzdG8tY2RmLXNpbXVsYXRpb24ta2xsLXYxIiwidHlwZSI6ImRvdWJsZSIsIm1pbiI6MC4wLCJtYXgiOjEuMCwiayI6MTAyNCwicXVhbnRpbGVfbGV2ZWxzIjpbMC4xLDAuMiwwLjMsMC40LDAuNSwwLjYsMC43LDAuOCwwLjldLCJxdWFudGlsZV92YWx1ZXMiOlswLjQxNjQyODgzODEzNjEwNjE1LDAuNDYyOTIxMzc1ODQ4Mjg0MiwwLjQ5NTg4MDUxNTcwNTgyNjIsMC41MjIwMTEyODA0OTQwNDE4LDAuNTQ1NTk3NjMwMjk1OTMsMC41NzEzNjU3NzU0MjM3MzAyLDAuNTk5OTc2ODY3MTE1NDE1OCwwLjYyOTY2ODI2NjcxMjYzODMsMC42NzQwOTg2NzU4MTY0MzRdfQ=="
+  },
+  "observations": [
+    {
+      "predicate_type": ">=",
+      "value": 0.041863,
+      "estimated_sel": 0.940121,
+      "actual_sel": 0.951862,
+      "timestamp": "2026-02-08T23:00:00Z"
+    },
+    {
+      "predicate_type": "<=",
+      "value": 0.15241,
+      "estimated_sel": 0.034757,
+      "actual_sel": 0.0,
+      "timestamp": "2026-02-09T00:00:00Z"
+    },
+    {
+      "predicate_type": "=",
+      "value": 0.547789,
+      "estimated_sel": 0.076371,
+      "actual_sel": 0.040174,
+      "timestamp": "2026-02-09T01:00:00Z"
+    },
+    {
+      "predicate_type": ">",
+      "value": 0.373522,
+      "estimated_sel": 0.864486,
+      "actual_sel": 0.912564,
+      "timestamp": "2026-02-09T02:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.00259,
+      "estimated_sel": 0.909588,
+      "actual_sel": 0.944486,
+      "timestamp": "2026-02-09T03:00:00Z",
+      "value_upper": 0.864483
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.984613,
+      "estimated_sel": 0.003078,
+      "actual_sel": 0.0,
+      "timestamp": "2026-02-09T04:00:00Z",
+      "value_upper": 0.995176
+    },
+    {
+      "predicate_type": "<",
+      "value": 0.417973,
+      "estimated_sel": 0.098121,
+      "actual_sel": 0.091882,
+      "timestamp": "2026-02-09T05:00:00Z"
+    },
+    {
+      "predicate_type": "<",
+      "value": 0.59733,
+      "estimated_sel": 0.655982,
+      "actual_sel": 0.651149,
+      "timestamp": "2026-02-09T06:00:00Z"
+    },
+    {
+      "predicate_type": "=",
+      "value": 0.382609,
+      "estimated_sel": 0.004561,
+      "actual_sel": 0.008467,
+      "timestamp": "2026-02-09T07:00:00Z"
+    }
+  ],
+  "corrected_kll": {
+    "type": "double",
+    "k": 1024,
+    "quantile_levels": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "quantile_values": [
+      0.42108,
+      0.466933,
+      0.5,
+      0.525386,
+      0.548401,
+      0.572654,
+      0.599086,
+      0.627746,
+      0.671192
+    ],
+    "bucket_boundaries": [
+      0.0,
+      0.42108,
+      0.466933,
+      0.5,
+      0.525386,
+      0.548401,
+      0.572654,
+      0.599086,
+      0.627746,
+      0.671192,
+      1.0
+    ]
+  }
+}

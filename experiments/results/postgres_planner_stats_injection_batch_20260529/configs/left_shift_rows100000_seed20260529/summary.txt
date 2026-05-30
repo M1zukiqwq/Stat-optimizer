@@ -1,0 +1,41 @@
+PostgreSQL planner-only stats injection
+================================================
+No wall-clock runtime is measured. True rows come from COUNT(*);
+estimated rows and plan shapes come from EXPLAIN (FORMAT JSON).
+
+Queries per method: 84
+Stale/fresh plan-shape disagreements: 42
+Hybrid selected: isomer
+Config: left_shift_rows100000_seed20260529
+
+Method          RowQE  QEImp  BeatStale  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------------
+stale           35.123    0.0%       0.0%       50.0%       0.0%     0.0%
+isomer          2.052   94.2%      97.6%       97.6%      95.2%     0.0%
+oasis           3.023   91.4%      92.9%       91.7%      95.2%    11.9%
+oasis_projected 2.026   94.2%      97.6%       97.6%      95.2%     0.0%
+hybrid          2.000   94.3%      97.6%       97.6%      95.2%     0.0%
+fresh           1.342   96.2%     100.0%      100.0%     100.0%     0.0%
+
+By family:
+  scan:
+    stale           RowQE=35.953 FreshPlan=75.0% Recovery=0.0%
+    isomer          RowQE=2.126 FreshPlan=100.0% Recovery=100.0%
+    oasis           RowQE=3.091 FreshPlan=96.4% Recovery=100.0%
+    oasis_projected RowQE=2.101 FreshPlan=100.0% Recovery=100.0%
+    hybrid          RowQE=2.071 FreshPlan=100.0% Recovery=100.0%
+    fresh           RowQE=1.379 FreshPlan=100.0% Recovery=100.0%
+  join:
+    stale           RowQE=35.953 FreshPlan=21.4% Recovery=0.0%
+    isomer          RowQE=2.126 FreshPlan=96.4% Recovery=95.5%
+    oasis           RowQE=3.091 FreshPlan=89.3% Recovery=90.9%
+    oasis_projected RowQE=2.101 FreshPlan=96.4% Recovery=95.5%
+    hybrid          RowQE=2.071 FreshPlan=96.4% Recovery=95.5%
+    fresh           RowQE=1.379 FreshPlan=100.0% Recovery=100.0%
+  join_dim_filter:
+    stale           RowQE=33.522 FreshPlan=53.6% Recovery=0.0%
+    isomer          RowQE=1.912 FreshPlan=96.4% Recovery=92.3%
+    oasis           RowQE=2.891 FreshPlan=89.3% Recovery=100.0%
+    oasis_projected RowQE=1.885 FreshPlan=96.4% Recovery=92.3%
+    hybrid          RowQE=1.865 FreshPlan=96.4% Recovery=92.3%
+    fresh           RowQE=1.271 FreshPlan=100.0% Recovery=100.0%

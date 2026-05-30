@@ -1,0 +1,180 @@
+{
+  "prior_kll": {
+    "type": "double",
+    "k": 1024,
+    "min": 0.0,
+    "max": 1.0,
+    "null_fraction": 0.023819,
+    "quantile_levels": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "quantile_values": [
+      0.206123,
+      0.27475,
+      0.337224,
+      0.408355,
+      0.528134,
+      0.642206,
+      0.716832,
+      0.781029,
+      0.857151
+    ],
+    "bucket_boundaries": [
+      0.0,
+      0.206123,
+      0.27475,
+      0.337224,
+      0.408355,
+      0.528134,
+      0.642206,
+      0.716832,
+      0.781029,
+      0.857151,
+      1.0
+    ],
+    "sketch_bytes_base64": "eyJmb3JtYXQiOiJwcmVzdG8tY2RmLXNpbXVsYXRpb24ta2xsLXYxIiwidHlwZSI6ImRvdWJsZSIsIm1pbiI6MC4wLCJtYXgiOjEuMCwiayI6MTAyNCwicXVhbnRpbGVfbGV2ZWxzIjpbMC4xLDAuMiwwLjMsMC40LDAuNSwwLjYsMC43LDAuOCwwLjldLCJxdWFudGlsZV92YWx1ZXMiOlswLjIwNjEyMjcxNDAzMTAyMTQsMC4yNzQ3NTAwMjMwMTk0Mzc3NCwwLjMzNzIyMzg5MTk4OTY5MTMsMC40MDgzNTUyOTc4NjY2ODI3MywwLjUyODEzNDE3MTc5MTEyOTksMC42NDIyMDYxOTc2MjkxODMzLDAuNzE2ODMyNDk0MTM1MTIxMiwwLjc4MTAyOTMyNDg0MjExOTgsMC44NTcxNTA5NTc5ODA0MDEyXX0="
+  },
+  "observations": [
+    {
+      "predicate_type": ">",
+      "value": 0.4436,
+      "estimated_sel": 0.556985,
+      "actual_sel": 0.472059,
+      "timestamp": "2026-01-27T05:00:00Z"
+    },
+    {
+      "predicate_type": "=",
+      "value": 0.588922,
+      "estimated_sel": 0.017115,
+      "actual_sel": 0.004902,
+      "timestamp": "2026-01-27T06:00:00Z"
+    },
+    {
+      "predicate_type": ">",
+      "value": 0.38425,
+      "estimated_sel": 0.61879,
+      "actual_sel": 0.366436,
+      "timestamp": "2026-01-27T07:00:00Z"
+    },
+    {
+      "predicate_type": ">=",
+      "value": 0.666029,
+      "estimated_sel": 0.35931,
+      "actual_sel": 0.174323,
+      "timestamp": "2026-01-27T08:00:00Z"
+    },
+    {
+      "predicate_type": "=",
+      "value": 0.662651,
+      "estimated_sel": 0.026162,
+      "actual_sel": 0.005059,
+      "timestamp": "2026-01-27T09:00:00Z"
+    },
+    {
+      "predicate_type": "=",
+      "value": 0.929261,
+      "estimated_sel": 0.013667,
+      "actual_sel": 0.002171,
+      "timestamp": "2026-01-27T10:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.180697,
+      "estimated_sel": 0.374637,
+      "actual_sel": 0.26243,
+      "timestamp": "2026-01-27T11:00:00Z",
+      "value_upper": 0.493929
+    },
+    {
+      "predicate_type": ">=",
+      "value": 0.467549,
+      "estimated_sel": 0.537467,
+      "actual_sel": 0.107935,
+      "timestamp": "2026-01-27T12:00:00Z"
+    },
+    {
+      "predicate_type": "<",
+      "value": 0.642888,
+      "estimated_sel": 0.586601,
+      "actual_sel": 0.785353,
+      "timestamp": "2026-01-27T13:00:00Z"
+    },
+    {
+      "predicate_type": ">=",
+      "value": 0.921734,
+      "estimated_sel": 0.053484,
+      "actual_sel": 0.007699,
+      "timestamp": "2026-01-27T14:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.225996,
+      "estimated_sel": 0.807822,
+      "actual_sel": 0.177423,
+      "timestamp": "2026-01-27T15:00:00Z",
+      "value_upper": 0.937848
+    },
+    {
+      "predicate_type": ">",
+      "value": 0.687671,
+      "estimated_sel": 0.331001,
+      "actual_sel": 0.027993,
+      "timestamp": "2026-01-27T16:00:00Z"
+    },
+    {
+      "predicate_type": "BETWEEN",
+      "value": 0.644919,
+      "estimated_sel": 0.20421,
+      "actual_sel": 0.012751,
+      "timestamp": "2026-01-27T17:00:00Z",
+      "value_upper": 0.790794
+    }
+  ],
+  "corrected_kll": {
+    "type": "double",
+    "k": 1024,
+    "quantile_levels": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "quantile_values": [
+      0.064098,
+      0.095,
+      0.117252,
+      0.133808,
+      0.151861,
+      0.171704,
+      0.189762,
+      0.21856,
+      0.279502
+    ],
+    "bucket_boundaries": [
+      0.0,
+      0.064098,
+      0.095,
+      0.117252,
+      0.133808,
+      0.151861,
+      0.171704,
+      0.189762,
+      0.21856,
+      0.279502,
+      1.0
+    ]
+  }
+}

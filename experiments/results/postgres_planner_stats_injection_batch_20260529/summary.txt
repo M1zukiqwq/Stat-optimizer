@@ -1,0 +1,41 @@
+Multi-configuration PostgreSQL planner-only stats injection
+================================================================
+No wall-clock runtime is measured. True rows come from COUNT(*);
+estimated rows and plan shapes come from EXPLAIN (FORMAT JSON).
+
+Configurations: 12
+Queries per configuration per method: 84
+
+Aggregate over all query instances:
+Method          RowQE  QEImp  BeatStale  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------------
+stale           27.748    0.0%       0.0%       56.0%       0.0%     0.0%
+isomer          2.355   91.5%      97.5%       96.1%      92.6%     1.1%
+oasis           3.306   88.1%      89.8%       88.6%      91.7%    13.8%
+oasis_projected 2.360   91.5%      97.0%       96.1%      92.6%     1.1%
+hybrid          2.358   91.5%      97.2%       96.1%      92.6%     1.1%
+fresh           1.412   94.9%      99.6%      100.0%     100.0%     0.0%
+
+Mean across configurations:
+Method          RowQE(mean±sd)  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------
+stale           28.436±6.585      56.0%       0.0%     0.0%
+isomer          2.372±0.283      96.1%      92.2%     1.0%
+oasis           3.313±0.228      88.6%      91.4%    13.7%
+oasis_projected 2.375±0.275      96.1%      92.2%     1.0%
+hybrid          2.374±0.286      96.1%      92.2%     1.0%
+fresh           1.415±0.095     100.0%     100.0%     0.0%
+
+Hybrid choices:
+  left_shift_rows100000_seed20260529: isomer
+  left_shift_rows100000_seed20260530: isomer
+  left_shift_rows100000_seed20260531: isomer
+  left_shift_rows200000_seed20260529: isomer
+  left_shift_rows200000_seed20260530: isomer
+  left_shift_rows200000_seed20260531: isomer
+  right_shift_rows100000_seed20260529: isomer
+  right_shift_rows100000_seed20260530: isomer
+  right_shift_rows100000_seed20260531: isomer
+  right_shift_rows200000_seed20260529: isomer
+  right_shift_rows200000_seed20260530: isomer
+  right_shift_rows200000_seed20260531: isomer

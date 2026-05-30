@@ -16,6 +16,7 @@ This experiment does NOT require a running database.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import random
@@ -49,6 +50,10 @@ from json_histogram_parser import load_feedback_sample
 from mlp_histogram_model_v2 import MlpHistogramModelV2
 from modern_baselines import correct_isomer, correct_quicksel_h
 from simulate_memory_kll_dataset import MemoryTable
+
+
+METHOD_ORDER = ["stale", "isomer", "oasis", "oasis_projected", "hybrid", "fresh"]
+ESTIMATOR_ORDER = ["independence", "gaussian_copula"]
 
 
 # ─── Gaussian Copula Estimator ───────────────────────────────────────────────
@@ -370,7 +375,10 @@ def correct_marginal_with_oasis(
     pred_norm = model.predict([record.feature_tensor])[0]
 
     # Convert back to original value range
-    corrected = [clamp01(min_val + v * value_range) for v in pred_norm]
+    def clip_to_range(value: float) -> float:
+        return max(min_val, min(max_val, value))
+
+    corrected = [clip_to_range(min_val + v * value_range) for v in pred_norm]
 
     # Enforce monotonicity
     for i in range(1, len(corrected)):
@@ -378,6 +386,141 @@ def correct_marginal_with_oasis(
             corrected[i] = corrected[i - 1]
 
     return [min_val] + corrected + [max_val]
+
+
+# ─── Joint Estimation Helpers ────────────────────────────────────────────────
+
+def estimate_joint_selectivity(
+    copula: GaussianCopula,
+    estimator: str,
+    col_boundaries: Sequence[Sequence[float]],
+    predicates: Sequence[Tuple[float, float]],
+    correlations: np.ndarray,
+) -> float:
+    """Estimate multi-column selectivity from corrected single-column marginals."""
+    if estimator == "gaussian_copula":
+        return copula.joint_selectivity_range(col_boundaries, predicates, correlations)
+    if estimator != "independence":
+        raise ValueError(f"Unsupported estimator: {estimator}")
+
+    # Maximum-entropy estimate under only one-dimensional marginal constraints:
+    # the joint distribution factorizes into independent marginals.
+    selectivity = 1.0
+    for col_index, (lower, upper) in enumerate(predicates):
+        p_lower = copula.marginal_cdf(col_boundaries[col_index], lower)
+        p_upper = copula.marginal_cdf(col_boundaries[col_index], upper)
+        selectivity *= max(p_upper - p_lower, 1e-12)
+    return max(selectivity, 1e-12)
+
+
+def marginal_range_selectivity(
+    copula: GaussianCopula,
+    boundaries: Sequence[float],
+    predicate: Tuple[float, float],
+) -> float:
+    lower, upper = predicate
+    p_lower = copula.marginal_cdf(boundaries, lower)
+    p_upper = copula.marginal_cdf(boundaries, upper)
+    return max(p_upper - p_lower, 1e-12)
+
+
+def actual_marginal_range_selectivity(
+    col_data: Sequence[float],
+    predicate: Tuple[float, float],
+) -> float:
+    lower, upper = predicate
+    count = sum(1 for value in col_data if lower <= value <= upper)
+    return max(count / max(len(col_data), 1), 1e-12)
+
+
+def observation_selectivity(
+    copula: GaussianCopula,
+    boundaries: Sequence[float],
+    observation: dict,
+) -> float:
+    predicate = observation.get("predicate_type", "<")
+    value = float(observation.get("value", 0.5))
+    if predicate in {"<", "<="}:
+        return copula.marginal_cdf(boundaries, value)
+    if predicate in {">", ">="}:
+        return 1.0 - copula.marginal_cdf(boundaries, value)
+    if predicate == "BETWEEN":
+        value_upper = float(observation.get("value_upper", value))
+        return marginal_range_selectivity(copula, boundaries, (value, value_upper))
+
+    # Approximate equality as a narrow range, matching tensorizer's fallback.
+    width = max((boundaries[-1] - boundaries[0]) * 0.01, 1e-6)
+    return marginal_range_selectivity(copula, boundaries, (value - width, value + width))
+
+
+def feedback_residual_score(
+    copula: GaussianCopula,
+    boundaries: Sequence[float],
+    observations: Sequence[dict],
+) -> float:
+    if not observations:
+        return float("inf")
+    errors = [
+        abs(observation_selectivity(copula, boundaries, obs) - float(obs.get("actual_sel", 0.0)))
+        for obs in observations
+    ]
+    return sum(errors) / len(errors)
+
+
+def choose_hybrid_marginal(
+    copula: GaussianCopula,
+    stale_bounds: Sequence[float],
+    isomer_bounds: Sequence[float],
+    oasis_bounds: Sequence[float],
+    oasis_projected_bounds: Sequence[float],
+    observations: Sequence[dict],
+    min_improvement: float,
+) -> Tuple[List[float], str, Dict[str, float]]:
+    scores = {
+        "stale": feedback_residual_score(copula, stale_bounds, observations),
+        "isomer": feedback_residual_score(copula, isomer_bounds, observations),
+        "oasis": feedback_residual_score(copula, oasis_bounds, observations),
+        "oasis_projected": feedback_residual_score(copula, oasis_projected_bounds, observations),
+    }
+    best_method = min(scores, key=scores.get)
+    if scores["stale"] - scores[best_method] < min_improvement:
+        best_method = "stale"
+
+    bounds_by_method = {
+        "stale": list(stale_bounds),
+        "isomer": list(isomer_bounds),
+        "oasis": list(oasis_bounds),
+        "oasis_projected": list(oasis_projected_bounds),
+    }
+    return bounds_by_method[best_method], best_method, scores
+
+
+def qerr(est: float, true: float) -> float:
+    est = max(est, 1e-8)
+    true = max(true, 1e-8)
+    return max(est / true, true / est)
+
+
+def geomean(values: Sequence[float]) -> float:
+    return math.exp(sum(math.log(max(value, 1e-12)) for value in values) / max(len(values), 1))
+
+
+def pct_improvement(base: float, value: float) -> float:
+    return (base - value) / max(base, 1e-12) * 100.0
+
+
+def pearson_corr(xs: Sequence[float], ys: Sequence[float]) -> float:
+    if len(xs) < 2 or len(xs) != len(ys):
+        return 0.0
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    dx = [x - mean_x for x in xs]
+    dy = [y - mean_y for y in ys]
+    denom_x = math.sqrt(sum(x * x for x in dx))
+    denom_y = math.sqrt(sum(y * y for y in dy))
+    if denom_x <= 1e-12 or denom_y <= 1e-12:
+        return 0.0
+    return sum(x * y for x, y in zip(dx, dy)) / (denom_x * denom_y)
 
 
 # ─── Main Experiment ──────────────────────────────────────────────────────────
@@ -404,8 +547,9 @@ def run_experiment(args):
 
     model = MlpHistogramModelV2.load(str(model_path))
 
-    correlations = [0.0, 0.3, 0.5, 0.7, 0.9]
-    drift_levels = [1, 5, 10, 20]
+    correlations = args.correlations
+    drift_levels = args.drift_levels
+    estimators = args.estimators
 
     for rho in correlations:
         for q in drift_levels:
@@ -433,15 +577,22 @@ def run_experiment(args):
                     for _ in range(args.n_observations):
                         # Random range predicate
                         v = sorted_drifted[rng.randint(0, n - 1)]
-                        # Compute actual selectivity
-                        count = sum(1 for x in drifted[c] if x <= v)
-                        act_sel = count / max(n, 1)
-                        # Compute estimated selectivity from stale histogram
+                        predicate_type = rng.choice(["<", "<=", ">=", ">"])
+
+                        # Compute estimated/actual selectivity with the same
+                        # predicate direction. This feedback is what OASIS sees.
+                        actual_cdf = sum(1 for x in drifted[c] if x <= v) / max(n, 1)
                         cdf_x, cdf_p = stale_bounds[c], [i / args.num_buckets for i in range(args.num_buckets + 1)]
-                        est_sel = evaluate_piecewise_cdf(cdf_x, cdf_p, v)
+                        estimated_cdf = evaluate_piecewise_cdf(cdf_x, cdf_p, v)
+                        if predicate_type in {"<", "<="}:
+                            act_sel = actual_cdf
+                            est_sel = estimated_cdf
+                        else:
+                            act_sel = 1.0 - actual_cdf
+                            est_sel = 1.0 - estimated_cdf
 
                         obs_list.append({
-                            "predicate_type": rng.choice(["<", "<=", ">=", ">"]),
+                            "predicate_type": predicate_type,
                             "value": v,
                             "estimated_sel": est_sel,
                             "actual_sel": act_sel,
@@ -470,10 +621,40 @@ def run_experiment(args):
                     except Exception:
                         isomer_bounds.append(stale_bounds[c])
 
+                # OASIS + feedback projection: use OASIS as the prior shape,
+                # then enforce consistency with the same feedback constraints.
+                oasis_projected_bounds = []
+                for c in range(2):
+                    try:
+                        projected_q = correct_isomer(
+                            oasis_bounds[c][0], oasis_bounds[c][-1],
+                            oasis_bounds[c][1:-1], col_observations[c],
+                            num_buckets=args.num_buckets,
+                        )
+                        oasis_projected_bounds.append([oasis_bounds[c][0]] + list(projected_q) + [oasis_bounds[c][-1]])
+                    except Exception:
+                        oasis_projected_bounds.append(oasis_bounds[c])
+
+                hybrid_bounds = []
+                hybrid_choices = []
+                hybrid_scores = []
+                for c in range(2):
+                    selected_bounds, selected_method, scores = choose_hybrid_marginal(
+                        copula=copula,
+                        stale_bounds=stale_bounds[c],
+                        isomer_bounds=isomer_bounds[c],
+                        oasis_bounds=oasis_bounds[c],
+                        oasis_projected_bounds=oasis_projected_bounds[c],
+                        observations=col_observations[c],
+                        min_improvement=args.hybrid_min_improvement,
+                    )
+                    hybrid_bounds.append(selected_bounds)
+                    hybrid_choices.append(selected_method)
+                    hybrid_scores.append(scores)
+
                 # Evaluate joint selectivity
                 rng = random.Random(seed + 9999)
-                n_predicates = 50
-                for _ in range(n_predicates):
+                for _ in range(args.n_predicates):
                     # Random 2-column range predicates
                     lo1 = rng.uniform(0.1, 0.5)
                     hi1 = rng.uniform(lo1, 0.9)
@@ -487,74 +668,141 @@ def run_experiment(args):
                     if true_sel < 1e-6:
                         continue
 
-                    # --- Independence-based joint selectivity ---
-                    # This is what most DBMS optimizers actually use
-                    def indep_sel(bounds, preds):
-                        sel = 1.0
-                        for c in range(len(preds)):
-                            lo, hi = preds[c]
-                            p_lo = copula.marginal_cdf(bounds[c], lo)
-                            p_hi = copula.marginal_cdf(bounds[c], hi)
-                            sel *= max(p_hi - p_lo, 1e-12)
-                        return sel
+                    method_bounds = {
+                        "stale": stale_bounds,
+                        "isomer": isomer_bounds,
+                        "oasis": oasis_bounds,
+                        "oasis_projected": oasis_projected_bounds,
+                        "hybrid": hybrid_bounds,
+                        "fresh": fresh_bounds,
+                    }
+                    correlation_matrix = np.array([[1.0, rho], [rho, 1.0]], dtype=float)
+                    actual_marginals = [
+                        actual_marginal_range_selectivity(drifted[col_index], predicate)
+                        for col_index, predicate in enumerate(predicates)
+                    ]
 
-                    stale_sel = indep_sel(stale_bounds, predicates)
-                    oasis_sel = indep_sel(oasis_bounds, predicates)
-                    isomer_sel = indep_sel(isomer_bounds, predicates)
-                    fresh_sel = indep_sel(fresh_bounds, predicates)
-
-                    def qerr(est, true):
-                        est = max(est, 1e-8)
-                        true = max(true, 1e-8)
-                        return max(est / true, true / est)
-
-                    results.append({
-                        "correlation": rho,
-                        "drift_q": q,
-                        "trial": trial,
-                        "true_sel": true_sel,
-                        "stale_qerr": qerr(stale_sel, true_sel),
-                        "oasis_qerr": qerr(oasis_sel, true_sel),
-                        "isomer_qerr": qerr(isomer_sel, true_sel),
-                        "fresh_qerr": qerr(fresh_sel, true_sel),
-                    })
+                    for estimator in estimators:
+                        estimates = {
+                            method: estimate_joint_selectivity(
+                                copula=copula,
+                                estimator=estimator,
+                                col_boundaries=bounds,
+                                predicates=predicates,
+                                correlations=correlation_matrix,
+                            )
+                            for method, bounds in method_bounds.items()
+                        }
+                        row = {
+                            "correlation": rho,
+                            "drift_q": q,
+                            "trial": trial,
+                            "estimator": estimator,
+                            "true_sel": true_sel,
+                            "hybrid_choice_c0": hybrid_choices[0],
+                            "hybrid_choice_c1": hybrid_choices[1],
+                        }
+                        for method in METHOD_ORDER:
+                            row[f"{method}_sel"] = estimates[method]
+                            row[f"{method}_qerr"] = qerr(estimates[method], true_sel)
+                            marginal_qerrors = [
+                                qerr(
+                                    marginal_range_selectivity(copula, method_bounds[method][col_index], predicate),
+                                    actual_marginals[col_index],
+                                )
+                                for col_index, predicate in enumerate(predicates)
+                            ]
+                            row[f"{method}_marginal_qerr_gm"] = geomean(marginal_qerrors)
+                            row[f"{method}_marginal_qerr_max"] = max(marginal_qerrors)
+                        for col_index, scores in enumerate(hybrid_scores):
+                            for method, score in scores.items():
+                                row[f"{method}_feedback_residual_c{col_index}"] = score
+                        results.append(row)
 
                 print("done")
 
     # Aggregate results
     by_config = defaultdict(list)
     for r in results:
-        key = (r["correlation"], r["drift_q"])
+        key = (r["estimator"], r["correlation"], r["drift_q"])
         by_config[key].append(r)
 
-    import math as _m
-    def geomean(vals):
-        return _m.exp(sum(_m.log(max(v, 1e-12)) for v in vals) / max(len(vals), 1))
+    print("\n" + "=" * 132)
+    print(f"{'Estimator':>16} | {'ρ':>5} | {'q':>3} | {'Stale QE':>10} | {'ISOMER QE':>10} | {'OASIS QE':>10} | {'Proj QE':>10} | {'Hybrid QE':>10} | {'Fresh QE':>10} | "
+          f"{'OASIS Imp%':>10} | {'Hybrid Imp%':>11} | {'Corr':>6} | N")
+    print("=" * 132)
 
-    print("\n" + "=" * 100)
-    print(f"{'ρ':>5} | {'q':>3} | {'Stale QE':>10} | {'ISOMER QE':>10} | {'OASIS QE':>10} | {'Fresh QE':>10} | "
-          f"{'OASIS Imp%':>10} | {'ISOMER Imp%':>11} | N")
-    print("=" * 100)
+    summary_rows = []
 
     for key in sorted(by_config.keys()):
-        rho, q = key
+        estimator, rho, q = key
         rows = by_config[key]
 
-        stale_gm = geomean([r["stale_qerr"] for r in rows])
-        oasis_gm = geomean([r["oasis_qerr"] for r in rows])
-        isomer_gm = geomean([r["isomer_qerr"] for r in rows])
-        fresh_gm = geomean([r["fresh_qerr"] for r in rows])
-        oasis_imp = (stale_gm - oasis_gm) / max(stale_gm, 1e-12) * 100
-        isomer_imp = (stale_gm - isomer_gm) / max(stale_gm, 1e-12) * 100
+        qerr_gm = {method: geomean([r[f"{method}_qerr"] for r in rows]) for method in METHOD_ORDER}
+        marginal_qerr_gm = {
+            method: geomean([r[f"{method}_marginal_qerr_gm"] for r in rows])
+            for method in METHOD_ORDER
+        }
+        stale_gm = qerr_gm["stale"]
+        oasis_gm = qerr_gm["oasis"]
+        oasis_projected_gm = qerr_gm["oasis_projected"]
+        isomer_gm = qerr_gm["isomer"]
+        hybrid_gm = qerr_gm["hybrid"]
+        fresh_gm = qerr_gm["fresh"]
+        oasis_imp = pct_improvement(stale_gm, oasis_gm)
+        isomer_imp = pct_improvement(stale_gm, isomer_gm)
+        oasis_projected_imp = pct_improvement(stale_gm, oasis_projected_gm)
+        hybrid_imp = pct_improvement(stale_gm, hybrid_gm)
+        recovery = (stale_gm - oasis_gm) / max(stale_gm - fresh_gm, 1e-12) * 100.0
+        marginal_improvements = [
+            math.log(max(r["stale_marginal_qerr_gm"], 1e-12)) - math.log(max(r["oasis_marginal_qerr_gm"], 1e-12))
+            for r in rows
+        ]
+        joint_improvements = [
+            math.log(max(r["stale_qerr"], 1e-12)) - math.log(max(r["oasis_qerr"], 1e-12))
+            for r in rows
+        ]
+        marginal_joint_corr = pearson_corr(marginal_improvements, joint_improvements)
+        hybrid_choice_counts = defaultdict(int)
+        for r in rows:
+            hybrid_choice_counts[str(r["hybrid_choice_c0"])] += 1
+            hybrid_choice_counts[str(r["hybrid_choice_c1"])] += 1
+        summary_rows.append({
+            "estimator": estimator,
+            "correlation": rho,
+            "drift_q": q,
+            "n": len(rows),
+            **{f"{method}_qerr_gm": qerr_gm[method] for method in METHOD_ORDER},
+            **{f"{method}_marginal_qerr_gm": marginal_qerr_gm[method] for method in METHOD_ORDER},
+            "oasis_improvement_pct": oasis_imp,
+            "isomer_improvement_pct": isomer_imp,
+            "oasis_projected_improvement_pct": oasis_projected_imp,
+            "hybrid_improvement_pct": hybrid_imp,
+            "oasis_recovery_pct": recovery,
+            "oasis_marginal_improvement_pct": pct_improvement(marginal_qerr_gm["stale"], marginal_qerr_gm["oasis"]),
+            "oasis_projected_marginal_improvement_pct": pct_improvement(marginal_qerr_gm["stale"], marginal_qerr_gm["oasis_projected"]),
+            "hybrid_marginal_improvement_pct": pct_improvement(marginal_qerr_gm["stale"], marginal_qerr_gm["hybrid"]),
+            "marginal_joint_log_improvement_corr": marginal_joint_corr,
+            "hybrid_choice_stale_frac": hybrid_choice_counts["stale"] / max(2 * len(rows), 1),
+            "hybrid_choice_isomer_frac": hybrid_choice_counts["isomer"] / max(2 * len(rows), 1),
+            "hybrid_choice_oasis_frac": hybrid_choice_counts["oasis"] / max(2 * len(rows), 1),
+            "hybrid_choice_oasis_projected_frac": hybrid_choice_counts["oasis_projected"] / max(2 * len(rows), 1),
+        })
 
-        print(f"{rho:5.1f} | {q:3d} | {stale_gm:10.3f} | {isomer_gm:10.3f} | {oasis_gm:10.3f} | {fresh_gm:10.3f} | "
-              f"{oasis_imp:+9.1f}% | {isomer_imp:+10.1f}% | {len(rows)}")
+        print(f"{estimator:>16} | {rho:5.1f} | {q:3d} | {stale_gm:10.3f} | {isomer_gm:10.3f} | {oasis_gm:10.3f} | {oasis_projected_gm:10.3f} | {hybrid_gm:10.3f} | {fresh_gm:10.3f} | "
+              f"{oasis_imp:+9.1f}% | {hybrid_imp:+10.1f}% | {marginal_joint_corr:+5.2f} | {len(rows)}")
 
     # Save results
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     with open(output_dir / "copula_results.json", "w") as f:
         json.dump(results, f, indent=2)
+    with open(output_dir / "copula_summary.json", "w") as f:
+        json.dump(summary_rows, f, indent=2)
+    with open(output_dir / "copula_summary.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(summary_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(summary_rows)
 
     # Generate LaTeX table
     generate_latex_table(by_config, output_dir)
@@ -564,41 +812,45 @@ def run_experiment(args):
 
 def generate_latex_table(by_config, output_dir):
     """Generate LaTeX table for paper."""
-    import math as _m
-    def geomean(vals):
-        return _m.exp(sum(_m.log(max(v, 1e-12)) for v in vals) / max(len(vals), 1))
-
     path = output_dir / "table_copula.tex"
     with open(path, "w") as f:
         f.write("\\begin{table}[t]\n")
         f.write("  \\centering\n")
         f.write("  \\small\n")
-        f.write("  \\caption{Copula-based joint selectivity estimation with different marginal inputs. "
+        f.write("  \\caption{Joint selectivity estimation with different single-column marginal inputs. "
                 "Q-Error ($\\downarrow$) for 2-column range predicates at varying correlations and drift. "
-                "OASIS-corrected marginals improve joint estimation over stale marginals via Gaussian copula.}\n")
+                "OASIS-Proj starts from OASIS marginals and projects them onto feedback constraints. "
+                "Hybrid chooses a per-column correction using feedback-window residuals. "
+                "Independence is the maximum-entropy estimator using only marginals; Gaussian copula adds a fixed dependence structure.}\n")
         f.write("  \\label{tab:copula}\n")
-        f.write("  \\setlength{\\tabcolsep}{4pt}\n")
-        f.write("  \\begin{tabular}{cc | rrrr | rr}\n")
+        f.write("  \\setlength{\\tabcolsep}{3pt}\n")
+        f.write("  \\begin{tabular}{lcc | rrrrrr | rrr}\n")
         f.write("    \\toprule\n")
-        f.write("    $\\rho$ & $q$ & Stale & ISOMER & OASIS & Fresh & OASIS Imp & ISOMER Imp \\\\\n")
+        f.write("    Estimator & $\\rho$ & $q$ & Stale & ISOMER & OASIS & OASIS-Proj & Hybrid & Fresh & OASIS Imp & Proj Imp & Hybrid Imp \\\\\n")
         f.write("    \\midrule\n")
 
         for key in sorted(by_config.keys()):
-            rho, q = key
+            estimator, rho, q = key
             rows = by_config[key]
             stale = geomean([r["stale_qerr"] for r in rows])
             oasis = geomean([r["oasis_qerr"] for r in rows])
+            oasis_projected = geomean([r["oasis_projected_qerr"] for r in rows])
             isomer = geomean([r["isomer_qerr"] for r in rows])
+            hybrid = geomean([r["hybrid_qerr"] for r in rows])
             fresh = geomean([r["fresh_qerr"] for r in rows])
-            oimp = (stale - oasis) / max(stale, 1e-12) * 100
-            iimp = (stale - isomer) / max(stale, 1e-12) * 100
+            oimp = pct_improvement(stale, oasis)
+            pimp = pct_improvement(stale, oasis_projected)
+            himp = pct_improvement(stale, hybrid)
 
             # Bold the best non-fresh method
-            best = min(oasis, isomer)
+            best = min(oasis, isomer, oasis_projected, hybrid)
             o_str = f"\\textbf{{{oasis:.3f}}}" if abs(oasis - best) < 0.001 else f"{oasis:.3f}"
             i_str = f"\\textbf{{{isomer:.3f}}}" if abs(isomer - best) < 0.001 else f"{isomer:.3f}"
+            p_str = f"\\textbf{{{oasis_projected:.3f}}}" if abs(oasis_projected - best) < 0.001 else f"{oasis_projected:.3f}"
+            h_str = f"\\textbf{{{hybrid:.3f}}}" if abs(hybrid - best) < 0.001 else f"{hybrid:.3f}"
+            estimator_label = "Indep." if estimator == "independence" else "Copula"
 
-            f.write(f"    {rho:.1f} & {q} & {stale:.3f} & {i_str} & {o_str} & {fresh:.3f} & {oimp:+.0f}\\% & {iimp:+.0f}% \\\\\n")
+            f.write(f"    {estimator_label} & {rho:.1f} & {q} & {stale:.3f} & {i_str} & {o_str} & {p_str} & {h_str} & {fresh:.3f} & {oimp:+.0f}\\% & {pimp:+.0f}\\% & {himp:+.0f}\\% \\\\\n")
 
         f.write("    \\bottomrule\n")
         f.write("  \\end{tabular}\n")
@@ -649,6 +901,12 @@ def main():
     parser.add_argument("--n-rows", type=int, default=5000)
     parser.add_argument("--n-observations", type=int, default=16)
     parser.add_argument("--n-trials", type=int, default=20)
+    parser.add_argument("--n-predicates", type=int, default=50)
+    parser.add_argument("--correlations", type=float, nargs="+", default=[0.0, 0.3, 0.5, 0.7, 0.9])
+    parser.add_argument("--drift-levels", type=int, nargs="+", default=[1, 5, 10, 20])
+    parser.add_argument("--estimators", nargs="+", choices=ESTIMATOR_ORDER, default=ESTIMATOR_ORDER)
+    parser.add_argument("--hybrid-min-improvement", type=float, default=0.002,
+                       help="Minimum feedback-residual improvement over stale required before the hybrid policy applies a correction.")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 

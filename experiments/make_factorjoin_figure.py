@@ -2,11 +2,11 @@
 """Publication figure for the FactorJoin + OASIS integration.
 
 Presentation-only: reads ``factorjoin_summary.csv`` produced by
-``factorjoin_oasis_experiment.py`` and renders grouped bars of join-cardinality
-Q-error per drift intensity. The point of the figure is the contrast between
-plain OASIS (which can exceed the stale baseline in the bilinear join kernel) and
-OASIS-Proj / Hybrid (which recover the gain and track the fresh-marginal floor).
-No experiment is rerun here.
+``factorjoin_oasis_experiment.py`` and renders a stale-to-fresh-normalized view
+of join-cardinality Q-error per drift intensity. The point of the figure is the
+contrast between deployed/calibrated marginals and the fresh-marginal floor. The
+no-projection ablation is intentionally left to Table~9 so the figure scale
+emphasizes deployable methods. No experiment is rerun here.
 """
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ import csv
 from pathlib import Path
 
 import matplotlib
-
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,22 +24,23 @@ SUMMARY = ROOT / "experiments" / "results" / "factorjoin_oasis_20260531" / "fact
 
 COLORS = {
     "Stale": "#666666",
-    "OASIS-noProj": "#E69F00",
     "ISOMER": "#0072B2",
     "OASIS": "#D55E00",
     "Hybrid": "#CC79A7",
     "Fresh": "#000000",
 }
+MARKERS = {
+    "ISOMER": "D",
+    "OASIS": "X",
+    "Hybrid": "v",
+}
 # (column suffix in CSV, legend label) in plotting order.
 # Naming: OASIS = full two-stage system (learned repair + projection);
-# OASIS-noProj = stage-1-only ablation (the raw learned marginal).
+# the stage-1-only ablation remains in Table 9.
 SERIES = [
-    ("stale", "Stale"),
-    ("oasis", "OASIS-noProj"),
     ("isomer", "ISOMER"),
     ("oasis_projected", "OASIS"),
     ("hybrid", "Hybrid"),
-    ("fresh", "Fresh"),
 ]
 
 
@@ -75,46 +75,43 @@ def main() -> None:
     rows.sort(key=lambda r: int(r["drift_q"]))
     drifts = [r["drift_q"] for r in rows]
 
-    fig, ax = plt.subplots(figsize=(6.6, 2.7))
-    n_groups = len(rows)
-    n_series = len(SERIES)
-    group_w = 0.82
-    bar_w = group_w / n_series
-    x = np.arange(n_groups)
+    fig, ax = plt.subplots(figsize=(3.45, 2.5))
+    x = np.array([int(d) for d in drifts])
 
-    for si, (key, label) in enumerate(SERIES):
-        vals = [float(r[f"{key}_qerr_gm"]) for r in rows]
-        offs = (si - (n_series - 1) / 2) * bar_w
-        bars = ax.bar(x + offs, vals, bar_w, label=label,
-                      color=COLORS[label], edgecolor="white", linewidth=0.4,
-                      zorder=3)
-        # Flag plain-OASIS bars that exceed the stale baseline (harmful regime).
-        if key == "oasis":
-            for gi, (b, v) in enumerate(zip(bars, vals)):
-                stale_v = float(rows[gi]["stale_qerr_gm"])
-                if v > stale_v + 1e-3:
-                    ax.text(b.get_x() + b.get_width() / 2, v + 0.006, "↑",
-                            ha="center", va="bottom", fontsize=8,
-                            color=COLORS["OASIS-noProj"], zorder=4)
-
-    # Per-group stale reference line to make the "above stale = harmful" read.
-    for gi, r in enumerate(rows):
-        sv = float(r["stale_qerr_gm"])
-        ax.plot([gi - group_w / 2, gi + group_w / 2], [sv, sv],
-                color=COLORS["Stale"], linestyle=(0, (4, 2)), linewidth=0.8, zorder=2)
+    for key, label in SERIES:
+        residual_gap = []
+        for r in rows:
+            stale = float(r["stale_qerr_gm"])
+            fresh = float(r["fresh_qerr_gm"])
+            value = float(r[f"{key}_qerr_gm"])
+            residual_gap.append((value - fresh) / (stale - fresh) * 100.0)
+        ax.plot(
+            x,
+            residual_gap,
+            label=label,
+            color=COLORS[label],
+            marker=MARKERS[label],
+            linewidth=1.7,
+            markersize=4.8,
+            zorder=3,
+        )
 
     ax.set_xticks(x)
-    ax.set_xticklabels([f"$q={d}$" for d in drifts])
-    ax.set_ylabel("Join-cardinality Q-error")
-    ax.set_xlabel("Drift intensity")
-    ax.set_ylim(1.0, max(float(r["oasis_qerr_gm"]) for r in rows) * 1.07)
-    ax.legend(ncol=6, loc="upper center", bbox_to_anchor=(0.5, 1.18),
-              frameon=False, columnspacing=1.1, handlelength=1.2)
-    ax.annotate("OASIS-noProj exceeds stale\n(bilinear join amplifies over-concentration)",
-                xy=(0.985, 0.96), xycoords="axes fraction", ha="right", va="top",
-                fontsize=6.6, color=COLORS["OASIS-noProj"])
+    ax.set_xticklabels([f"{d}" for d in drifts])
+    ax.set_xlabel("Drift intensity q")
+    ax.set_ylabel("Residual gap (%)")
+    ax.set_ylim(0, 20)
+    ax.set_yticks([0, 5, 10, 15, 20])
+    ax.axhline(0, color=COLORS["Fresh"], linewidth=0.9, zorder=2)
+    ax.text(x[-1] + 0.3, 0.5, "Fresh", ha="left", va="bottom",
+            fontsize=7, color=COLORS["Fresh"])
+    ax.text(0.985, 0.94, "Stale = 100% (not plotted)",
+            transform=ax.transAxes, ha="right", va="top",
+            fontsize=6.8, color=COLORS["Stale"])
+    ax.legend(ncol=3, loc="upper center", bbox_to_anchor=(0.5, 1.18),
+              frameon=False, columnspacing=1.1, handlelength=1.5)
 
-    fig.tight_layout()
+    fig.tight_layout(pad=0.6)
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     for ext in ("pdf", "png"):
         fig.savefig(FIG_DIR / f"fig_factorjoin_oasis.{ext}", bbox_inches="tight")

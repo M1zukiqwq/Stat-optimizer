@@ -307,6 +307,7 @@ def _generate_latex_table(summary_rows, output_dir):
                 "kernel.}\n")
         f.write("  \\label{tab:factorjoin}\n")
         f.write("  \\setlength{\\tabcolsep}{4pt}\n")
+        f.write("  \\adjustbox{max width=\\columnwidth}{%\n")
         f.write("  \\begin{tabular}{l | rrrrrr | rr}\n    \\toprule\n")
         f.write("    $q$ & Stale & OASIS-noProj & ISOMER & OASIS & Hybrid & Fresh & OASIS +\\% & Hybrid +\\% \\\\\n")
         f.write("    \\midrule\n")
@@ -324,7 +325,7 @@ def _generate_latex_table(summary_rows, output_dir):
                     f"{cell(r['hybrid_qerr_gm'])} & {r['fresh_qerr_gm']:.3f} & "
                     f"{r['oasis_projected_improvement_pct']:+.1f}\\% & "
                     f"{r['hybrid_improvement_pct']:+.1f}\\% \\\\\n")
-        f.write("    \\bottomrule\n  \\end{tabular}\n\\end{table}\n")
+        f.write("    \\bottomrule\n  \\end{tabular}\n  }\n\\end{table}\n")
     print(f"LaTeX table saved to {path}")
 
 

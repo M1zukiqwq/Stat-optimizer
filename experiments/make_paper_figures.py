@@ -15,6 +15,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -183,17 +185,22 @@ def plot_ood_drift_realism() -> None:
     bar_methods = ["isomer", "oasis", "oasis_projected"]
     by_key = {(r["pattern"], r["method"]): float(r["qerror_gm"]) for r in rows}
 
-    fig, ax = plt.subplots(figsize=(7.1, 3.45))
+    fig, ax = plt.subplots(figsize=(7.1, 3.35))
     x = list(range(len(patterns)))
     width = 0.20
     offsets = [(-1 + i) * width for i in range(len(bar_methods))]
+    stale_by_pattern = {pattern: by_key[(pattern, "stale")] for pattern, _ in patterns}
     for method, offset in zip(bar_methods, offsets):
         label = method_label(method)
-        ys = [by_key[(pattern, method)] for pattern, _ in patterns]
+        ys = [
+            (stale_by_pattern[pattern] - by_key[(pattern, method)])
+            / stale_by_pattern[pattern]
+            * 100.0
+            for pattern, _ in patterns
+        ]
         ax.bar(
             [i + offset for i in x],
-            [value - 1.0 for value in ys],
-            bottom=1.0,
+            ys,
             width=width,
             label=label,
             color=COLORS[label],
@@ -201,29 +208,31 @@ def plot_ood_drift_realism() -> None:
             linewidth=0.5,
         )
 
-    stale_y = [by_key[(pattern, "stale")] for pattern, _ in patterns]
+    fresh_y = [
+        (stale_by_pattern[pattern] - by_key[(pattern, "fresh")])
+        / stale_by_pattern[pattern]
+        * 100.0
+        for pattern, _ in patterns
+    ]
     ax.plot(
         x,
-        stale_y,
+        fresh_y,
         linestyle="none",
-        marker="o",
-        markersize=4.8,
-        markerfacecolor="white",
-        markeredgecolor=COLORS["Stale"],
-        markeredgewidth=1.2,
-        label="Stale",
+        marker="_",
+        markersize=10,
+        markeredgewidth=1.5,
+        color=COLORS["Fresh"],
+        label="Fresh",
         zorder=5,
     )
-    for xi, yi in zip(x, stale_y):
-        ax.text(xi, yi * 1.05, f"{yi:.1f}", ha="center", va="bottom", fontsize=6.8, color=COLORS["Stale"])
-
-    ax.axhline(1.0, color=COLORS["Fresh"], linestyle=(0, (3, 2)), linewidth=1.0)
-    ax.text(len(patterns) - 0.1, 1.015, "Fresh", ha="right", va="bottom", fontsize=7)
-    ax.set_ylabel("Selectivity Q-error (log scale)")
+    ax.axhline(0.0, color=COLORS["Stale"], linestyle=(0, (3, 2)), linewidth=1.0)
+    ax.text(len(patterns) - 0.1, 1.0, "Stale", ha="right", va="bottom", fontsize=7, color=COLORS["Stale"])
     ax.set_xticks(x)
     ax.set_xticklabels([label for _, label in patterns])
-    set_qerror_log_axis(ax, ticks=[1.0, 1.2, 1.5, 2.0, 3.0, 4.0], ylim=(0.98, 4.9))
-    ax.legend(ncol=4, frameon=False, loc="upper right")
+    ax.set_ylabel("Q-error reduction vs stale (%)")
+    ax.set_ylim(0, 82)
+    ax.set_yticks([0, 20, 40, 60, 80])
+    ax.legend(ncol=4, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.18))
     save_figure(fig, "fig_ood_drift_realism")
 
 
@@ -243,50 +252,63 @@ def plot_trace_grounded_drift() -> None:
         ("customer_segment_churn", "Customer\nchurn"),
         ("seasonal_mixed_maintenance", "Seasonal\nmixed"),
     ]
-    bar_methods = ["isomer", "oasis", "oasis_projected", "hybrid"]
+    methods = ["isomer", "oasis", "oasis_projected", "hybrid", "fresh"]
     by_key = {(r["trace"], r["method"]): float(r["qerror_gm"]) for r in rows}
 
-    fig, ax = plt.subplots(figsize=(7.2, 3.45))
-    x = list(range(len(traces)))
-    width = 0.17
-    offsets = [(-1.5 + i) * width for i in range(len(bar_methods))]
-    for method, offset in zip(bar_methods, offsets):
-        label = method_label(method)
-        ys = [by_key[(trace, method)] for trace, _ in traces]
-        ax.bar(
-            [i + offset for i in x],
-            [value - 1.0 for value in ys],
-            bottom=1.0,
-            width=width,
-            label=label,
-            color=COLORS[label],
-            edgecolor="white",
-            linewidth=0.5,
-        )
+    stale_by_trace = {trace: by_key[(trace, "stale")] for trace, _ in traces}
+    data = []
+    for method in methods:
+        data.append([
+            (stale_by_trace[trace] - by_key[(trace, method)])
+            / stale_by_trace[trace]
+            * 100.0
+            for trace, _ in traces
+        ])
+    data_arr = np.array(data)
 
-    stale_y = [by_key[(trace, "stale")] for trace, _ in traces]
-    ax.plot(
-        x,
-        stale_y,
-        linestyle="none",
-        marker="o",
-        markersize=4.8,
-        markerfacecolor="white",
-        markeredgecolor=COLORS["Stale"],
-        markeredgewidth=1.2,
-        label="Stale",
-        zorder=5,
+    fig, ax = plt.subplots(figsize=(7.2, 2.8))
+    cmap = LinearSegmentedColormap.from_list(
+        "oasis_reduction", ["#D55E00", "#f7f7f7", "#0072B2"]
     )
-    for xi, yi in zip(x, stale_y):
-        ax.text(xi, yi * 1.035, f"{yi:.1f}", ha="center", va="bottom", fontsize=6.8, color=COLORS["Stale"])
+    norm = TwoSlopeNorm(vmin=-10, vcenter=0, vmax=55)
+    image = ax.imshow(data_arr, aspect="auto", cmap=cmap, norm=norm)
+    ax.grid(False)
 
-    ax.axhline(1.0, color=COLORS["Fresh"], linestyle=(0, (3, 2)), linewidth=1.0)
-    ax.text(len(traces) - 0.1, 1.008, "Fresh", ha="right", va="bottom", fontsize=7)
-    ax.set_ylabel("Selectivity Q-error (log scale)")
-    ax.set_xticks(x)
+    ax.set_xticks(range(len(traces)))
     ax.set_xticklabels([label for _, label in traces])
-    set_qerror_log_axis(ax, ticks=[1.0, 1.1, 1.25, 1.5, 2.0], ylim=(0.99, 2.35))
-    ax.legend(ncol=5, frameon=False, loc="upper right")
+    ax.set_yticks(range(len(methods)))
+    ax.set_yticklabels([method_label(method) for method in methods])
+    ax.set_xticks(np.arange(-0.5, len(traces), 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(methods), 1), minor=True)
+    ax.grid(which="minor", color="white", linewidth=1.0)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    for row_idx, row in enumerate(data_arr):
+        for col_idx, value in enumerate(row):
+            color = "white" if value > 24 or value < -5 else "#222222"
+            ax.text(
+                col_idx,
+                row_idx,
+                f"{value:+.1f}",
+                ha="center",
+                va="center",
+                fontsize=7.2,
+                color=color,
+            )
+
+    ax.text(
+        len(traces) - 0.48,
+        -0.82,
+        "Stale = 0%",
+        ha="right",
+        va="center",
+        fontsize=7,
+        color=COLORS["Stale"],
+    )
+    cbar = fig.colorbar(image, ax=ax, fraction=0.032, pad=0.02)
+    cbar.set_label("Q-error reduction vs stale (%)")
+    cbar.ax.tick_params(labelsize=7)
+    fig.tight_layout(pad=0.5)
     save_figure(fig, "fig_trace_grounded_drift")
 
 

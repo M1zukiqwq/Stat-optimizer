@@ -5,6 +5,7 @@
 \usepackage{multirow}
 \usepackage{makecell}
 \usepackage{graphicx}
+\usepackage{adjustbox}
 \usepackage{subcaption}
 \usepackage{amsmath,amssymb,amsfonts,amsthm}
 \usepackage{listings}
@@ -18,6 +19,10 @@
 \pgfplotsset{compat=1.18}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds,calc}
 \setlist{nosep,leftmargin=*}
+
+\newcommand{\oasisUseMaxWidthResize}[1]{%
+  \renewcommand{\resizebox}[3]{\adjustbox{max width=#1}{##3}}%
+}
 
 \newtheorem{problem}{Problem}
 
@@ -405,7 +410,8 @@ native statistics and the canonical OASIS view.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/fig_single_column_drift_qerror.pdf}
+  \adjustbox{max width=.82\textwidth}{%
+    \includegraphics{figures/fig_single_column_drift_qerror.pdf}}
   \caption{Single-column selectivity Q-error across drift intensity. All
   methods consume the same feedback budget. This figure isolates the learned
   repair stage (OASIS-noProj), which remains close to the stale prior at mild
@@ -429,7 +435,10 @@ ISOMER is constrained by the observed feedback window rather than a learned
 global drift prior. The advantage persists on unseen drift intensities $q=25$
 and $q=30$.
 
+\begingroup
+\oasisUseMaxWidthResize{.84\columnwidth}
 \input{../experiments/results/synthetic_paper_suite_tree_isomer_v3/main/table_simple_baselines.tex}
+\endgroup
 
 Table~\ref{tab:simple_baselines} compares OASIS-noProj with simple feedback
 heuristics. Fixed linear interpolation and exponential feedback averaging are
@@ -440,14 +449,20 @@ feedback, but to learning how the prior and observations should interact.
 \subsection{Structural Metrics and Initial-Distribution Generalization}
 \label{sec:structural-generalization}
 
+\begingroup
+\oasisUseMaxWidthResize{.96\textwidth}
 \input{../experiments/results/synthetic_paper_suite_rerun_20260529/main/table_structural_metrics.tex}
+\endgroup
 
 Table~\ref{tab:mae} shows that OASIS-noProj improves structural histogram
 quality, not only Q-error. At $q=10$, quantile MAE drops from 0.208 for the stale
 prior to 0.055 for OASIS-noProj, and selectivity MAE drops from 0.190 to 0.049.
 OASIS-noProj remains the best method on both metrics for every $q\geq5$.
 
+\begingroup
+\oasisUseMaxWidthResize{.90\columnwidth}
 \input{../experiments/results/synthetic_paper_suite_tree_isomer_v3/distribution/table_distribution.tex}
+\endgroup
 
 Table~\ref{tab:dist_generalization} evaluates transfer across initial
 distributions at $q=10$. The learned stage (OASIS-noProj), trained on
@@ -457,6 +472,7 @@ triangular, exponential, and Gaussian-mixture starts, reducing Q-error by
 
 \begingroup
 \let\oasisOriginalCaption\caption
+\renewcommand{\small}{\footnotesize}
 \renewcommand{\caption}[1]{\oasisOriginalCaption{Single-column selectivity
 Q-error ($\downarrow$) of the full two-stage OASIS versus the OASIS-noProj
 ablation, on in-distribution compound drift. At mild drift $q=1$, ISOMER is
@@ -493,12 +509,14 @@ post-drift distribution. No OOD retraining is used.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/fig_ood_drift_realism.pdf}
+  \adjustbox{max width=.94\textwidth}{%
+    \includegraphics{figures/fig_ood_drift_realism.pdf}}
   \caption{Out-of-distribution drift realism suite. OASIS is trained only on
   compound drift and evaluated unchanged on deployment-inspired drift families.
-  Values are geometric mean selectivity Q-error on a log-scaled axis; stale
-  statistics are shown as open circles and the dashed line is fresh post-drift
-  statistics.}
+  Bars report the percentage reduction in geometric-mean selectivity Q-error
+  relative to stale statistics for the same drift family; higher is better. The
+  dashed zero line is stale, and black ticks show the fresh post-drift
+  reference.}
   \label{fig:ood_drift_realism}
 \end{figure*}
 
@@ -528,12 +546,13 @@ training generator.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/fig_trace_grounded_drift.pdf}
+  \includegraphics[width=.98\textwidth]{figures/fig_trace_grounded_drift.pdf}
   \caption{Benchmark-inspired DML trace sanity check. Each trace emits explicit
   insert/update/delete events anchored to an analytical benchmark maintenance
-  pattern. Values are geometric mean selectivity Q-error on a log-scaled axis;
-  stale statistics are shown as open circles and the dashed line is fresh
-  post-drift statistics.}
+  pattern. Cells report the percentage reduction in geometric-mean selectivity
+  Q-error relative to stale statistics for the same trace; higher is better,
+  while negative values indicate regressions below stale. Stale is $0\%$ by
+  definition, and the Fresh row shows the post-drift reference.}
   \label{fig:trace_grounded_drift}
 \end{figure*}
 
@@ -563,12 +582,13 @@ states.
 
 \begin{table}[t]
   \centering
+  \small
   \caption{Counterfactual selectivity evaluation on compound drift test data.
   ``Sampled-Refresh'' is a simulated column-level resampling proxy. Recovery
   measures the fraction of fresh/oracle Q-error improvement recovered by the
   learned stage (OASIS-noProj). No query runtime is measured.}
   \label{tab:counterfactual_selectivity}
-  \setlength{\tabcolsep}{4pt}
+  \setlength{\tabcolsep}{3.5pt}
   \begin{tabular}{c r r r r r}
     \toprule
     $q$ & \#Pred & Stale QE & Sampled-Refresh & OASIS-noProj QE & Recovery \\
@@ -601,7 +621,10 @@ initializing from the learned stage gives the full OASIS, and initializing from
 the post-drift marginal is a reference upper bound. All variants are scored on
 held-out future predicates, not on the feedback window they were fit to.
 
+\begingroup
+\oasisUseMaxWidthResize{.96\textwidth}
 \input{../experiments/results/projection_locality_20260531/table_projection_initialization.tex}
+\endgroup
 
 Table~\ref{tab:projection_initialization} shows that the learned stage is not
 decorative. Holding the projection fixed, initializing from the learned marginal
@@ -650,7 +673,7 @@ distribution.
   Hybrid uses only feedback-window residuals for selection.}
   \label{tab:marginal_joint}
   \setlength{\tabcolsep}{4pt}
-  \resizebox{\textwidth}{!}{%
+  \adjustbox{max width=.94\textwidth}{%
   \begin{tabular}{l | rrrrrr | rrr}
     \toprule
     Estimator & Stale & OASIS-noProj & ISOMER & OASIS & Hybrid & Fresh &
@@ -704,7 +727,10 @@ with each method's corrected one-dimensional marginals. The Archimedean copulas
 are intentionally mis-specified models for the Gaussian-correlated data, which
 tests whether the marginal-repair benefit survives an imperfect dependence model.
 
+\begingroup
+\oasisUseMaxWidthResize{.96\textwidth}
 \input{../experiments/results/composition_family_20260531/table_composition_family.tex}
+\endgroup
 
 Table~\ref{tab:composition_family} confirms both halves of the deployment story
 across the whole family. OASIS-noProj again gives only weak and inconsistent
@@ -736,22 +762,28 @@ key histogram; the binning, the distinct-values-per-bin assumption, and the row
 counts are identical for all methods. The metric is join-cardinality Q-error
 against the exact join size on the drifted data; no query runtime is measured.
 
+\begingroup
+\renewcommand{\small}{\scriptsize}
 \input{../experiments/results/factorjoin_oasis_20260531/table_factorjoin.tex}
+\endgroup
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{figures/fig_factorjoin_oasis.pdf}
-  \caption{FactorJoin join-cardinality Q-error by drift intensity. Dashed lines
-  mark the per-group stale baseline; arrows flag the regime where OASIS-noProj
-  exceeds stale. In the bilinear join kernel, the uncalibrated learned marginal
-  (OASIS-noProj) is harmful for $q\geq10$, whereas the full OASIS and Hybrid stay
-  near the fresh-marginal floor.}
+  \adjustbox{max width=.92\columnwidth}{%
+    \includegraphics{figures/fig_factorjoin_oasis.pdf}}
+  \caption{FactorJoin join-cardinality Q-error by drift intensity for the
+  deployed/calibrated marginal sources. Values are the residual gap to the
+  fresh-marginal floor, normalized by the stale-to-fresh gap; $0\%$ is fresh and
+  $100\%$ is stale, so lower is better. The no-projection ablation is reported
+  in Table~\ref{tab:factorjoin}; the full OASIS and Hybrid stay near the
+  fresh-marginal floor.}
   \label{fig:factorjoin}
 \end{figure}
 
-Table~\ref{tab:factorjoin} and Figure~\ref{fig:factorjoin} show the strongest
-form of the calibration finding.
-Here OASIS-noProj does not merely underperform---it is actively harmful, raising
+Table~\ref{tab:factorjoin} shows the strongest form of the calibration finding,
+and Figure~\ref{fig:factorjoin} visualizes the deployable calibrated methods on
+a stale-to-fresh-normalized scale.
+In Table~\ref{tab:factorjoin}, OASIS-noProj does not merely underperform---it is actively harmful, raising
 aggregate join Q-error above the stale baseline ($-13.5\%$, and as much as
 $-22.7\%$ at moderate drift). The mechanism is structural: the FactorJoin
 estimate is a bilinear functional of the two per-bin mass vectors, so it is
@@ -782,7 +814,10 @@ is obtained with \texttt{COUNT(*)}; PostgreSQL estimated rows and plan shape are
 obtained with \texttt{EXPLAIN (FORMAT JSON)}. The experiment does not measure
 query runtime.
 
+\begingroup
+\oasisUseMaxWidthResize{.88\columnwidth}
 \input{../experiments/results/postgres_planner_stats_injection_batch_20260529/table_postgres_planner_stats_injection_batch.tex}
+\endgroup
 
 Table~\ref{tab:postgres_planner_stats_injection_batch} provides the strongest
 DBMS-facing evidence in this paper. The batch covers two drift directions,
@@ -806,7 +841,8 @@ projection stage calibrates it before the DBMS planner consumes it.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/fig_postgres_plan_family.pdf}
+  \adjustbox{max width=.94\textwidth}{%
+    \includegraphics{figures/fig_postgres_plan_family.pdf}}
   \caption{PostgreSQL planner-only plan-shape effects by query family. Cell
   labels are percentages. Panel A reports fresh-statistics plan-shape match,
   Panel B reports recovery of stale/fresh mismatches, and Panel C reports new
@@ -836,7 +872,8 @@ future predicates; only the feedback budget or feedback values are changed.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figures/fig_feedback_sensitivity.pdf}
+  \adjustbox{max width=.90\textwidth}{%
+    \includegraphics{figures/fig_feedback_sensitivity.pdf}}
   \caption{Feedback-budget and feedback-noise sensitivity in the
   optimizer-decision proxy. Panels A--B vary the visible feedback window $K$;
   Panels C--D perturb feedback selectivities with multiplicative log-normal
@@ -870,7 +907,10 @@ abstention when feedback attribution is unreliable.
 \subsection{Deployment Safety Summary}
 \label{sec:deployment-safety}
 
+\begingroup
+\oasisUseMaxWidthResize{.97\textwidth}
 \input{../experiments/results/deployment_safety_20260529/table_deployment_safety.tex}
+\endgroup
 
 Table~\ref{tab:deployment_safety} collects the safety evidence that determines
 how OASIS should be deployed. The learned stage alone (OASIS-noProj) improves
@@ -997,7 +1037,10 @@ feedback window. Each predicate endpoint is mapped to fresh-CDF space and
 assigned the directed Hausdorff distance to the nearest feedback endpoint,
 giving near ($\leq 0.05$), mid ($\leq 0.15$), and far ($>0.15$) bins.
 
+\begingroup
+\oasisUseMaxWidthResize{.94\textwidth}
 \input{../experiments/results/projection_locality_20260531/table_feedback_locality.tex}
+\endgroup
 
 Table~\ref{tab:feedback_locality} reports the diagnostic on the mixed predicate
 population. The full OASIS beats ISOMER in every bin, and---restricting to the

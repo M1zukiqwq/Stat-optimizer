@@ -770,8 +770,8 @@ def method_label(method: str) -> str:
     return {
         "stale": "Stale",
         "isomer": "ISOMER",
-        "oasis": "OASIS",
-        "oasis_projected": "OASIS-Proj",
+        "oasis": "OASIS-noProj",
+        "oasis_projected": "OASIS",
         "hybrid": "Hybrid",
         "fresh": "Fresh",
     }[method]

@@ -20,13 +20,16 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = ROOT / "paper" / "figures"
 
+# Naming: OASIS = full two-stage system (learned repair + feedback-consistency
+# projection); OASIS-noProj = stage-1-only ablation (the raw learned marginal).
 COLORS = {
     "Stale": "#666666",
     "Prior": "#666666",
     "STHoles": "#56B4E9",
     "QuickSel-H": "#009E73",
     "ISOMER": "#0072B2",
-    "OASIS": "#E69F00",
+    "OASIS-noProj": "#E69F00",
+    "OASIS": "#D55E00",
     "OASIS-Proj": "#D55E00",
     "Hybrid": "#CC79A7",
     "Fresh": "#000000",
@@ -38,7 +41,8 @@ MARKERS = {
     "STHoles": "s",
     "QuickSel-H": "^",
     "ISOMER": "D",
-    "OASIS": "P",
+    "OASIS-noProj": "P",
+    "OASIS": "X",
     "OASIS-Proj": "X",
     "Hybrid": "v",
 }
@@ -88,8 +92,8 @@ def method_label(method: str) -> str:
         "stale": "Stale",
         "prior": "Stale",
         "isomer": "ISOMER",
-        "oasis": "OASIS",
-        "oasis_projected": "OASIS-Proj",
+        "oasis": "OASIS-noProj",
+        "oasis_projected": "OASIS",
         "hybrid": "Hybrid",
         "fresh": "Fresh",
     }
@@ -127,7 +131,7 @@ def plot_single_column_drift() -> None:
         / "summary.csv"
     )
     methods = ["Prior", "STHoles", "QuickSel-H", "ISOMER", "OASIS"]
-    label_map = {"Prior": "Stale"}
+    label_map = {"Prior": "Stale", "OASIS": "OASIS-noProj"}
     q_values = sorted({int(r["q_mods"]) for r in rows if r["method"] in methods})
     by_method = {
         method: {

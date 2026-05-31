@@ -451,7 +451,7 @@ def write_main_tables(summaries: Sequence[MethodSummary], output_dir: Path) -> N
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\begin{tabular}{c | rr | rr | rr | rr | rr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    & \\multicolumn{2}{c|}{Stale Prior} & \\multicolumn{2}{c|}{STHoles} & \\multicolumn{2}{c|}{QuickSel-H} & \\multicolumn{2}{c|}{ISOMER} & \\multicolumn{2}{c}{OASIS (ours)} \\\\n")
+        handle.write("    & \\multicolumn{2}{c|}{Stale Prior} & \\multicolumn{2}{c|}{STHoles} & \\multicolumn{2}{c|}{QuickSel-H} & \\multicolumn{2}{c|}{ISOMER} & \\multicolumn{2}{c}{OASIS-noProj (ours)} \\\\n")
         handle.write("    \\cmidrule(lr){2-3}\\cmidrule(lr){4-5}\\cmidrule(lr){6-7}\\cmidrule(lr){8-9}\\cmidrule(lr){10-11}\n")
         handle.write("    $q$ & Q-Err & — & Q-Err & +\\% & Q-Err & +\\% & Q-Err & +\\% & Q-Err & +\\% \\\\n")
         handle.write("    \\midrule\n")
@@ -484,7 +484,7 @@ def write_main_tables(summaries: Sequence[MethodSummary], output_dir: Path) -> N
         handle.write("    \\toprule\n")
         handle.write("    & \\multicolumn{5}{c|}{Quantile MAE ($\\downarrow$)} & \\multicolumn{5}{c}{Selectivity MAE ($\\downarrow$)} \\\\n")
         handle.write("    \\cmidrule(lr){2-6}\\cmidrule(lr){7-11}\n")
-        handle.write("    $q$ & Prior & STHoles & QSel-H & ISOMER & OASIS & Prior & STHoles & QSel-H & ISOMER & OASIS \\\\n")
+        handle.write("    $q$ & Prior & STHoles & QSel-H & ISOMER & OASIS-noProj & Prior & STHoles & QSel-H & ISOMER & OASIS-noProj \\\\n")
         handle.write("    \\midrule\n")
         for q_mods in q_values:
             per_q = {summary.method: summary for summary in summaries if summary.q_mods == q_mods}
@@ -786,7 +786,7 @@ def evaluate_distribution_suite(args: argparse.Namespace, output_root: Path) -> 
         handle.write("  \\label{tab:dist_generalization}\n")
         handle.write("  \\begin{tabular}{l r r r r r}\n")
         handle.write("    \\toprule\n")
-        handle.write("    Initial Distribution & Stale & STHoles & QuickSel-H & ISOMER & OASIS \\\\\n")
+        handle.write("    Initial Distribution & Stale & STHoles & QuickSel-H & ISOMER & OASIS-noProj \\\\\n")
         handle.write("    \\midrule\n")
         for dist_type in DIST_TYPES:
             per_dist = {row.method: row for row in dist_rows if row.distribution == dist_type}

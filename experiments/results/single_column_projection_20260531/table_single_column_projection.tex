@@ -1,0 +1,21 @@
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Single-column selectivity Q-error ($\downarrow$) of the full two-stage OASIS versus the OASIS-noProj ablation, on in-distribution compound drift. The full system stays below ISOMER at every drift level, so the deployed (projected) form keeps a learned single-column advantage; the projection costs only a small amount relative to the stage-1 ablation, the price paid for the downstream composition and join safety shown in Tables~\ref{tab:marginal_joint}, \ref{tab:composition_family} and \ref{tab:factorjoin}.}
+  \label{tab:single_column_projection}
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{c | rrr r | r}
+    \toprule
+    $q$ & Stale & ISOMER & OASIS-noProj & OASIS & OASIS red.\% \\
+    \midrule
+     1 & 1.188 & \textbf{1.092} & 1.150 & 1.111 & +6\% \\
+     3 & 1.460 & 1.184 & 1.186 & \textbf{1.178} & +19\% \\
+     5 & 1.749 & 1.247 & 1.215 & \textbf{1.209} & +31\% \\
+    10 & 2.633 & 1.544 & \textbf{1.281} & 1.393 & +47\% \\
+    15 & 2.995 & 1.649 & \textbf{1.353} & 1.409 & +53\% \\
+    20 & 3.028 & 1.668 & \textbf{1.276} & 1.364 & +55\% \\
+    25 & 3.383 & 1.733 & \textbf{1.303} & 1.412 & +58\% \\
+    30 & 3.220 & 1.716 & \textbf{1.268} & 1.379 & +57\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}

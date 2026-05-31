@@ -1,19 +1,21 @@
 \begin{table}[t]
   \centering
   \small
-  \caption{Simple heuristic baselines vs.\ OASIS at selected drift intensities. Results are averaged over three independent training seeds (42, 123, 456) with a different evaluation protocol than the main comparison in Table~\ref{tab:qerror}; absolute Q-Error values are therefore not directly comparable across the two tables. Both heuristics consume the same observation window $K{=}16$. FeedAvg worsens estimation at all drift levels.}
+  \caption{Simple heuristic baselines vs.\ OASIS-noProj (the learned stage-1 repair) at selected drift intensities. Results are averaged over three independent training seeds (42, 123, 456) with a different evaluation protocol than the main single-column comparison; absolute Q-Error values are therefore not directly comparable across the two protocols. Both heuristics consume the same observation window $K{=}16$. FeedAvg worsens estimation at all drift levels.}
   \label{tab:simple_baselines}
-  \setlength{\tabcolsep}{5pt}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\columnwidth}{!}{%
   \begin{tabular}{c | rrrr}
     \toprule
     & \multicolumn{4}{c}{Q-Error ($\downarrow$ better)} \\
     \cmidrule(lr){2-5}
-    $q$ & Stale & LinInterp & FeedAvg & OASIS \\
+    $q$ & Stale & LinInterp & FeedAvg & OASIS-noProj \\
     \midrule
     \textbf{ 5} & 1.791 & 1.628 & 1.835 & \textbf{1.238} \\
     \textbf{10} & 2.471 & 2.118 & 2.565 & \textbf{1.255} \\
     \textbf{20} & 3.370 & 2.749 & 3.553 & \textbf{1.296} \\
     \textbf{30} & 3.500 & 2.823 & 3.690 & \textbf{1.345} \\
     \bottomrule
-  \end{tabular}
+  \end{tabular}%
+  }
 \end{table}

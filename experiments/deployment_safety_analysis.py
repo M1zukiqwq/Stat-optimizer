@@ -92,16 +92,16 @@ def build_safety_rows(args: argparse.Namespace) -> List[dict]:
         {
             "scenario": "PostgreSQL planner",
             "risk_signal": "New plan deviations",
-            "uncontrolled": f"OASIS {pct(float(pg[('all', 'oasis')]['new_plan_deviation_frac']))}",
-            "guarded": f"OASIS-Proj {pct(float(pg[('all', 'oasis_projected')]['new_plan_deviation_frac']))}",
+            "uncontrolled": f"OASIS-noProj {pct(float(pg[('all', 'oasis')]['new_plan_deviation_frac']))}",
+            "guarded": f"OASIS {pct(float(pg[('all', 'oasis_projected')]['new_plan_deviation_frac']))}",
             "secondary": f"FreshPlan {pct(float(pg[('all', 'oasis_projected')]['fresh_plan_match_frac']))}",
             "gate": "projection",
         },
         {
             "scenario": "PostgreSQL joins",
             "risk_signal": "Join new deviations",
-            "uncontrolled": f"OASIS {pct(float(pg[('join', 'oasis')]['new_plan_deviation_frac']))}",
-            "guarded": f"OASIS-Proj {pct(float(pg[('join', 'oasis_projected')]['new_plan_deviation_frac']))}",
+            "uncontrolled": f"OASIS-noProj {pct(float(pg[('join', 'oasis')]['new_plan_deviation_frac']))}",
+            "guarded": f"OASIS {pct(float(pg[('join', 'oasis_projected')]['new_plan_deviation_frac']))}",
             "secondary": f"Recovery {pct(float(pg[('join', 'oasis_projected')]['plan_recovery_frac']))}",
             "gate": "projection",
         },
@@ -134,7 +134,7 @@ def build_safety_rows(args: argparse.Namespace) -> List[dict]:
             "risk_signal": "Selectivity Q-error",
             "uncontrolled": f"Stale {trace_qerr['stale']:.3f}",
             "guarded": f"Hybrid {trace_qerr['hybrid']:.3f}",
-            "secondary": f"Proj {trace_qerr['oasis_projected']:.3f}",
+            "secondary": f"OASIS {trace_qerr['oasis_projected']:.3f}",
             "gate": choice_mix(all_trace_choices),
         },
     ]
@@ -157,7 +157,7 @@ def write_latex_table(path: Path, rows: Sequence[dict]) -> None:
         handle.write("\\begin{table*}[t]\n")
         handle.write("  \\centering\n")
         handle.write("  \\small\n")
-        handle.write("  \\caption{Deployment safety checks. Projection and residual-based Hybrid gating are evaluated without oracle/fresh information. P/I/O/S denote OASIS-Proj, ISOMER, OASIS, and stale choices in the residual gate.}\n")
+        handle.write("  \\caption{Deployment safety checks. Projection and residual-based Hybrid gating are evaluated without oracle/fresh information. P/I/O/S denote OASIS (full two-stage), ISOMER, OASIS-noProj, and stale choices in the residual gate.}\n")
         handle.write("  \\label{tab:deployment_safety}\n")
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
@@ -181,7 +181,7 @@ def write_summary(path: Path, rows: Sequence[dict]) -> None:
     lines = [
         "Deployment safety checks",
         "=" * 32,
-        "P/I/O/S denote OASIS-Proj, ISOMER, OASIS, and stale choices.",
+        "P/I/O/S denote OASIS (full two-stage), ISOMER, OASIS-noProj, and stale choices.",
         "",
     ]
     for row in rows:

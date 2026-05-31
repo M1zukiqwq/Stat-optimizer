@@ -1,0 +1,16 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Feedback-locality diagnostic. Future predicates are binned by their directed Hausdorff distance to feedback predicate endpoints in fresh-CDF space. Values are geometric-mean Q-error.}
+  \label{tab:feedback_locality}
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{l | r | rrrrr | rr}
+    \toprule
+    Locality & Preds & Stale & ISOMER & OASIS-noProj & OASIS & Fresh & OASIS vs ISOMER & OASIS win \\
+    \midrule
+    near<= 0.05 & 37719 & 1.789 & 1.292 & 1.285 & 1.222 & 1.000 & +5.4\% & 60.7\% \\
+    mid<= 0.15 & 18983 & 1.862 & 1.341 & 1.477 & 1.288 & 1.000 & +3.9\% & 54.9\% \\
+    far> 0.15 & 8834 & 1.978 & 1.417 & 1.614 & 1.411 & 1.000 & +0.4\% & 48.1\% \\
+    \bottomrule
+  \end{tabular}
+\end{table*}

@@ -6,6 +6,7 @@
 \usepackage{multirow}
 \usepackage{makecell}
 \usepackage{graphicx}
+\usepackage{adjustbox}
 \usepackage{subcaption}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithm}
@@ -66,7 +67,7 @@
 \maketitle
 
 This document collects supplementary materials for the paper
-``OASIS: Feedback-Driven Marginal Statistics Correction for Cost-Based Query Optimizers.''
+``OASIS: Regime-Aware Feedback Calibration for Optimizer Marginal Statistics.''
 It provides detailed scope and error-budget positioning (\S\,A),
 including the marginal-to-joint composition boundary,
 model architecture and instrumentation details (\S\,B),
@@ -78,7 +79,8 @@ PostgreSQL planner-only statistics-injection protocol details (\S\,G),
 OOD drift realism protocol (\S\,H),
 benchmark-inspired DML trace protocol (\S\,I),
 feedback-budget, feedback-noise, and deployment-safety diagnostic protocols
-(\S\,J), and detailed overhead breakdowns (\S\,K).
+(\S\,J), Stage-2 calibration and estimator-agnostic prior-source swap details
+(\S\,K), and detailed overhead breakdowns (\S\,L).
 
 %% ═════════════════════════════════════════════════════════════════════════════
 \section{Scope and Error Budget}
@@ -405,13 +407,15 @@ paper's finding that the Stage-2 calibration is regime-dependent.
 
 \subsection{Operators}
 
-All Stage-2 operators act on the same interval partition induced by the active
-feedback predicates and start from the OASIS-noProj histogram. \emph{Hard
-projection} (the default OASIS Stage 2) performs cyclic I-projections so that
-every active predicate's interval mass matches its observed selectivity exactly,
-dropping the oldest constraints when the active set becomes infeasible.
+Stage-2 operators are defined for any supplied marginal prior. In the fixed-prior
+comparison below, the supplied prior is the OASIS-noProj histogram; the
+prior-source swap later in this section varies that input. All operators act on
+the same interval partition induced by the active feedback predicates. \emph{Hard
+projection} (the default exact Stage-2 operator) performs cyclic I-projections so
+that every active predicate's interval mass matches its observed selectivity
+exactly, dropping the oldest constraints when the active set becomes infeasible.
 \emph{Soft projection} instead minimizes
-$\mathrm{KL}(p\,\|\,p_{\text{noProj}}) + \lambda\sum_j w_j (A_j p - y_j)^2$ by
+$\mathrm{KL}(p\,\|\,p_{\text{prior}}) + \lambda\sum_j w_j (A_j p - y_j)^2$ by
 mirror descent over cell masses, where $A_j$ is the interval mask of feedback
 $j$ and $y_j$ its observed selectivity. We study three weightings: full-window
 ($w_j{=}1$), a fixed recent window ($w_j{=}1$ for the last $k{=}8$ observations,
@@ -420,12 +424,13 @@ hard reference distribution $p_{\text{ref}}$ to the most recent $k$ observations
 scores each constraint by $\text{conflict}_j = |A_j p_{\text{ref}} - y_j|$, and
 sets $w_j = \exp(-(\text{conflict}_j/\tau)^2)$ with $\tau{=}0.03$, so feedback
 contradicted by the recent observations is suppressed while old-but-consistent
-feedback is retained. \emph{Banded projection} I-projects $p_{\text{noProj}}$
+feedback is retained. \emph{Banded projection} I-projects $p_{\text{prior}}$
 onto the bands $y_j\pm\kappa\sqrt{y_j(1-y_j)}$ ($\kappa{=}0$ recovers hard
-projection). The \emph{calibrated router} selects, per case, the candidate with
-the lowest feedback-window residual among
-$\{$stale, ISOMER, OASIS-noProj, hard projection, conflict-aware soft$\}$. All
-operators and the diagnostic are implemented in
+projection). In the fixed-prior comparison, the \emph{calibrated router} selects,
+per case, the candidate with the lowest feedback-window residual among
+$\{$stale, ISOMER, OASIS-noProj, hard projection, conflict-aware soft$\}$; in the
+prior-source swap, the raw supplied prior replaces OASIS-noProj in the same
+protocol. All operators and the diagnostic are implemented in
 \path{cdf_kll_ml_pipeline/modern_baselines.py} (\path{correct_soft_isomer},
 \path{correct_band_isomer}) and \path{experiments/oasis_soft_projection_diagnostics.py}.
 
@@ -448,16 +453,38 @@ documented in the preceding sections, with the soft/router methods added.
 
 \input{../experiments/results/stage2_calibration_20260531/table_stage2_calibration_single.tex}
 
-Table~\ref{tab:stage2-app-single} shows that full-window soft has the best raw
-single-column accuracy but, as the safety suites below show, is unsafe; the
-calibrated router recovers most of that accuracy (1.395) while remaining
-deployment-safe, and has the lowest feedback residual, join regret, and (not
-shown) new-risk loss (1.37\% versus hard 1.81\%). The router routes to the
+Table~\ref{tab:stage2-app-single} shows that full-window soft has the lowest
+single-column Q-error and feedback residual but, as the safety suites below
+show, is unsafe. The calibrated router recovers most of that accuracy (1.395)
+while remaining deployment-safe; among deployable variants, it gives the best
+optimizer-proxy join regret and the lowest new-risk loss (1.37\% versus hard
+1.81\%). The router routes to the
 conflict-aware soft candidate on 44\% of cases and to hard/ISOMER/OASIS-noProj
 otherwise. As a negative control, banded projection monotonically \emph{worsens}
 single-column Q-error as the band widens: $\kappa\in\{0.04,0.10,0.20,0.35\}$
 gives Q-error $\{1.437,1.450,1.470,1.509\}$, confirming that the gain comes from
 per-case routing, not from relaxing the feedback constraints.
+
+\subsection{Estimator-Agnostic Prior-Source Swap}
+
+The main text also asks whether Stage 2 is merely an OASIS-MLP-specific patch.
+The prior-source swap uses the same cached drift cases and the same held-out
+future-predicate protocol as the Stage-2 comparison, but replaces the supplied
+marginal prior with six alternatives: stale statistics, LinInterp, FeedAvg,
+STHoles, QuickSel-H, and the OASIS MLP. Each source is evaluated raw, after hard
+projection initialized from that source, and after the calibrated router over
+$\{$stale, ISOMER, raw prior, hard projection, conflict-aware soft$\}$.
+
+\input{../experiments/results/stage1_estimator_swap_20260531/table_stage1_estimator_swap.tex}
+
+Table~\ref{tab:stage1_estimator_swap} shows that the calibration layer is
+estimator-agnostic in aggregate. Hard projection improves every raw prior, and
+the calibrated router further improves every source-level row, reducing future
+Q-error by 11.3\%--41.9\% relative to the corresponding raw marginal. The final
+router outputs cluster tightly (1.392--1.437), which supports the Stage-2-centric
+interpretation while also tempering the uniqueness claim for the learned prior.
+The OASIS MLP remains a useful prior generator, but the reusable mechanism is the
+feedback calibration layer that can accept several imperfect marginal sources.
 
 \subsection{Out-of-Distribution and Trace Safety}
 

@@ -7,6 +7,7 @@ fails on the strong batch-load and range-shift families and on append/returns
 traces; the recent-window and conflict-aware variants remove those failures.}
 \label{tab:stage2-app-safety}
 \setlength{\tabcolsep}{5pt}
+\adjustbox{max width=.98\textwidth}{%
 \begin{tabular}{lrrrr}
 \toprule
 Family / trace & Hard (Proj) & Recent8 soft & Conflict soft & Full-window soft \\
@@ -22,4 +23,5 @@ Trace sales append & 1.121 & --- & 1.135 & 1.190 \\
 Trace returns/cancel & 1.142 & --- & 1.158 & 1.204 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}

@@ -175,13 +175,14 @@ def emit_main_table(args, out_dir: Path) -> None:
         "\\begin{table}[t]",
         "  \\centering",
         "  \\caption{Stage-2 calibration variants on held-out future predicates (cached",
-        "  drift, fixed OASIS checkpoint). Lower is better. Full-window soft has the best",
-        "  raw single-column metrics but is unsafe under sequential drift",
+        "  drift, fixed OASIS checkpoint). Lower is better. Full-window soft has the lowest",
+        "  selectivity Q-error and feedback residual but is unsafe under sequential drift",
         "  (Section~\\ref{sec:ood-drift-realism}); the calibrated router is the best",
         "  \\emph{deployable} variant, recovering most of the single-column gain over hard",
         "  projection while remaining safe to route.}",
         "  \\label{tab:stage2_calibration}",
         "  \\setlength{\\tabcolsep}{5pt}",
+        "  \\adjustbox{max width=.98\\textwidth}{%",
         "  \\begin{tabular}{lrrrr}",
         "    \\toprule",
         "    Stage-2 variant & Sel. QErr & Feedback resid. & Quantile MAE & Join regret \\\\",
@@ -189,6 +190,7 @@ def emit_main_table(args, out_dir: Path) -> None:
         *body,
         "    \\bottomrule",
         "  \\end{tabular}",
+        "  }",
         "\\end{table}",
     ]
     write(out_dir / "table_stage2_calibration_main.tex", lines)
@@ -212,6 +214,7 @@ def emit_single_table(args, out_dir: Path) -> None:
         "better.}",
         "\\label{tab:stage2-app-single}",
         "\\setlength{\\tabcolsep}{4pt}",
+        "\\adjustbox{max width=.98\\textwidth}{%",
         "\\begin{tabular}{lrrrrrr}",
         "\\toprule",
         " & \\multicolumn{4}{c}{Single-column} & \\multicolumn{2}{c}{Optimizer proxy} \\\\",
@@ -221,6 +224,7 @@ def emit_single_table(args, out_dir: Path) -> None:
         *body,
         "\\bottomrule",
         "\\end{tabular}",
+        "}",
         "\\end{table}",
     ]
     write(out_dir / "table_stage2_calibration_single.tex", lines)
@@ -269,6 +273,7 @@ def emit_safety_table(args, out_dir: Path) -> None:
         "traces; the recent-window and conflict-aware variants remove those failures.}",
         "\\label{tab:stage2-app-safety}",
         "\\setlength{\\tabcolsep}{5pt}",
+        "\\adjustbox{max width=.98\\textwidth}{%",
         "\\begin{tabular}{lrrrr}",
         "\\toprule",
         "Family / trace & Hard (Proj) & Recent8 soft & Conflict soft & Full-window soft \\\\",
@@ -278,6 +283,7 @@ def emit_safety_table(args, out_dir: Path) -> None:
         *[row_trace(label, key) for label, key in tr_rows],
         "\\bottomrule",
         "\\end{tabular}",
+        "}",
         "\\end{table}",
     ]
     write(out_dir / "table_stage2_calibration_safety.tex", lines)
@@ -303,6 +309,7 @@ def emit_pg_table(args, out_dir: Path) -> None:
         "Hybrid because the residual gate routes to ISOMER and never selects soft.}",
         "\\label{tab:stage2-app-pg}",
         "\\setlength{\\tabcolsep}{6pt}",
+        "\\adjustbox{max width=.98\\textwidth}{%",
         "\\begin{tabular}{lrrr}",
         "\\toprule",
         "Method & Row QErr & Fresh-plan match & New plan deviations \\\\",
@@ -313,6 +320,7 @@ def emit_pg_table(args, out_dir: Path) -> None:
         row("Calibrated router", "calibrated_hybrid"),
         "\\bottomrule",
         "\\end{tabular}",
+        "}",
         "\\end{table}",
     ]
     write(out_dir / "table_stage2_calibration_pg.tex", lines)

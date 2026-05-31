@@ -43,7 +43,7 @@
 
 \begin{frontmatter}
 
-\title{OASIS: Feedback-Driven Marginal Statistics Correction for Cost-Based Query Optimizers}
+\title{OASIS: Regime-Aware Feedback Calibration for Optimizer Marginal Statistics}
 
 \author[inst1]{Author Names Redacted for Review}
 \affiliation[inst1]{organization={Affiliation Redacted},
@@ -52,49 +52,50 @@
   country={}}
 
 \begin{abstract}
-Cost-based optimizers depend on column-level statistics that are refreshed by
-periodic \texttt{ANALYZE} passes. Between refreshes, continuous inserts,
-deletes, and updates create a staleness gap: the optimizer keeps planning with
-obsolete histograms even though query execution exposes predicate-level
-feedback. This paper presents OASIS, a two-stage statistics-layer correction
-pipeline: a learned drift-repair model first predicts corrected single-column
-marginals from stale histograms and recent query feedback, and a
-feedback-consistency projection then calibrates the repaired marginal before it
-is exposed to downstream estimators or a DBMS planner. OASIS maps engine-native
-statistics to a canonical quantile/CDF view, requires no base-table rescans, and
-leaves the optimizer's search procedure and cost model unchanged.
+Cost-based optimizers consume marginal statistics, but feedback-driven repairs
+of stale histograms are not automatically safe to expose to a planner. A learned
+or heuristic repair may improve future single-column selectivity while remaining
+inconsistent with the predicates just observed; downstream composition, join
+estimators, and DBMS plan selection can amplify that local inconsistency. This
+paper presents OASIS, a statistics-layer framework that separates marginal prior
+generation from optimizer-facing feedback calibration. A Stage-1 repair supplies
+a post-drift single-column prior, and a Stage-2 calibration layer turns that
+prior into a feedback-consistent statistics object before it is consumed
+downstream. OASIS maps engine-native statistics to a canonical quantile/CDF view,
+requires no base-table rescans, and leaves the optimizer's search procedure and
+cost model unchanged.
 
-The evaluation is optimizer-facing rather than runtime-facing, and it shows that
-both stages are necessary. The learned repair stage alone reduces single-column
-selectivity Q-error by 51.3\%, 57.9\%, and 60.6\% at drift intensities $q=10$,
-$20$, and $30$, outperforming local-feedback methods such as ISOMER in the
-moderate-to-large drift regime; such methods are constrained by observed
-feedback and do not learn a reusable global drift-repair prior. The projection
-stage is what makes the repaired marginal safe to compose: the stage-one
-marginal alone gives only limited and unstable multi-column gains and is
-\emph{actively harmful} in the bilinear FactorJoin join kernel, whereas the full
-two-stage OASIS recovers stable gains. Embedded as a drop-in marginal source
-across a six-estimator composition family (independence, IPF/Sinkhorn, and four
-copulas), OASIS improves every estimator in that family by 22\%--38\%. In the
-FactorJoin join kernel, OASIS-noProj is harmful, while the full OASIS recovers
-stable join-cardinality gains. Across 12 PostgreSQL planner-only configurations,
-OASIS reduces aggregate row-estimation Q-error from 27.748 to 2.360 and matches
-the fresh-statistics plan shape on 96.1\% of queries, while the projection
-reduces new plan deviations from 13.8\% to 1.1\%.
+The central contribution is the Stage-2 calibration layer. Hard
+ISOMER/IPF-style projection is safe for joins and planner-facing use, where
+residual one-dimensional errors are amplified, but it can overfit the current
+feedback window on future single-column predicates. We therefore add a
+consistency-gated soft projection that down-weights feedback contradicted by the
+most recent observations, and a residual-gated calibrated router that selects
+per case among stale, local-feedback, repaired, hard-projected, and
+soft-projected marginals using only deployment-visible feedback residuals. A
+banded relaxation of the hard constraints is a negative result, showing that the
+gain comes from regime-aware calibration and routing rather than from simply
+loosening equality constraints.
 
-We then show that the Stage-2 calibration is \emph{regime-dependent}: exact
-(hard) projection is best for join and planner safety, whereas a
-consistency-gated \emph{soft} projection---which down-weights feedback
-contradicted by the most recent observations---generalizes better for future
-single-column and optimizer-facing accuracy. A residual-gated router that adds
-soft projection to its candidate pool selects per case from a deployment-visible
-signal: in a held-out future-predicate evaluation it lowers single-column
-Q-error from 1.442 (hard projection) to 1.395 and optimizer-proxy selectivity
-Q-error from 1.446 to 1.396, while matching hard projection on the FactorJoin
-kernel and remaining identical to the deployed Hybrid on the PostgreSQL
-plan-shape batch, because the gate never routes to soft where exactness matters. A simpler residual-gated Hybrid already
-supports safe deployment under sparse or noisy feedback, cutting aggregate
-DML-trace Q-error from 1.295 to 1.072. No query runtime is measured.
+The evaluation is optimizer-facing rather than runtime-facing. First, calibration
+is necessary for safety: the raw learned marginal gives weak and unstable
+multi-column gains and is \emph{actively harmful} in the bilinear FactorJoin join
+kernel, whereas calibrated OASIS improves every member of a six-estimator
+composition family by 22\%--38\%. Across 12 PostgreSQL planner-only
+configurations, calibrated OASIS reduces aggregate row-estimation Q-error from
+27.748 to 2.360 and matches the fresh-statistics plan shape on 96.1\% of
+queries, while calibration reduces new plan deviations from 13.8\% to 1.1\%.
+Second, calibration is regime-dependent: the calibrated router lowers
+future-predicate single-column Q-error from 1.442 (hard projection) to 1.395 and
+optimizer-proxy selectivity Q-error from 1.446 to 1.396, while matching the safe
+hard/Hybrid behavior on FactorJoin and PostgreSQL checks because the gate does
+not route to soft where exactness matters. Third, calibration is
+estimator-agnostic: a Stage-1 swap experiment shows that the same Stage-2 router
+improves stale, LinInterp, FeedAvg, STHoles, QuickSel-H, and OASIS-MLP priors.
+The learned Stage 1 remains useful as a strong prior generator---under fixed
+projection it improves held-out future-predicate Q-error from 1.536 (projection
+from stale) to 1.446---but the deployment-facing novelty is the reusable
+calibration layer. No query runtime is measured.
 \end{abstract}
 
 \begin{graphicalabstract}
@@ -110,8 +111,8 @@ DML-trace Q-error from 1.295 to 1.072. No query runtime is measured.
 ]
   \node[box] (stale) {Stale\\histogram};
   \node[box, right=of stale] (feedback) {Query\\feedback};
-  \node[box, right=of feedback] (oasis) {OASIS stage 1\\learned drift repair};
-  \node[calib, right=of oasis] (proj) {OASIS stage 2\\feedback projection};
+  \node[box, right=of feedback] (oasis) {Stage 1\\marginal prior};
+  \node[calib, right=of oasis] (proj) {Stage 2\\calibrated router};
   \node[box, right=of proj] (planner) {DBMS planner\\estimated rows + plans};
   \draw[arrow] (stale) -- (feedback);
   \draw[arrow] (feedback) -- (oasis);
@@ -122,10 +123,10 @@ DML-trace Q-error from 1.295 to 1.072. No query runtime is measured.
 \end{graphicalabstract}
 
 \begin{highlights}
-\item OASIS pairs a learned single-column drift-repair stage with a feedback-consistency projection.
-\item Both stages are necessary: learning supplies a reusable drift prior; projection makes the marginal safe to compose.
-\item Stage-2 calibration is regime-dependent; a residual-gated router adds a consistency-gated soft projection and improves single-column and optimizer-facing accuracy with no join/planner regression.
-\item OASIS supplies drop-in marginals for copula, IPF, and FactorJoin join estimators.
+\item OASIS separates marginal prior generation from optimizer-facing feedback calibration.
+\item Stage-2 calibration is regime-dependent: hard projection is safer for joins/planners, while consistency-gated soft projection improves future-predicate accuracy.
+\item A residual-gated calibrated router improves single-column and optimizer-facing accuracy with no join/planner regression relative to the deployed Hybrid.
+\item The calibration layer is estimator-agnostic across stale, heuristic, STHoles, QuickSel-H, and OASIS-MLP priors.
 \item Deployment safety is evaluated with traces, feedback noise, and PostgreSQL planner checks.
 \end{highlights}
 
@@ -164,58 +165,54 @@ to the existing CBO.
 The key observation is that a DBMS already obtains useful feedback while
 executing ordinary queries. For a filter predicate, the optimizer's estimated
 selectivity and the executor's observed selectivity expose a local discrepancy
-between the stale histogram and the current data distribution. OASIS turns a
-recent window of such observations into a corrected single-column histogram
-before the statistics reach the optimizer. The design is intentionally
-non-invasive: OASIS requires a query-completion feedback listener and a
-statistics-assembly hook, but no changes to the optimizer's search algorithm or
-cost model.
+between the stale histogram and the current data distribution. The tempting
+response is to repair the histogram directly from those observations. However,
+the deployment problem is sharper than producing a marginal that looks better on
+average: a repaired marginal must also be reliable near the predicates that were
+just observed, because downstream estimators and planners may amplify local
+one-dimensional mistakes into larger joint-cardinality or plan-shape errors.
 
-The central challenge is that feedback is sparse, local, and heterogeneous.
-Naively forcing a histogram to match a few recent predicates can overfit the
-feedback window; ignoring the feedback leaves the prior stale. OASIS addresses
-this problem by learning a \emph{drift-correction function}. It encodes the
-stale quantile histogram together with recent predicate observations and uses a
-compact pooled MLP to predict corrected quantile boundaries. The same
-38K-parameter checkpoint is trained once on simulation-derived drift scenarios
-and then reused across columns and schemas in our experiments.
+This paper treats stale marginal-statistics correction as two coupled tasks:
+\emph{prior generation} and \emph{feedback calibration}. A prior generator
+extrapolates from the stale histogram and recent observations to a plausible
+post-drift marginal. In OASIS we instantiate this first task with a compact
+38K-parameter pooled MLP trained once on simulation-derived drift scenarios and
+then reused across columns and schemas. The learned prior is useful: under a
+fixed projection operator, initializing from the learned marginal lowers
+held-out future-predicate Q-error from 1.536 (projection from stale, i.e.,
+ISOMER) to 1.446, and the advantage grows with drift. But prior quality alone is
+not sufficient. The raw learned marginal can be globally plausible while still
+violating the current feedback window, and our downstream experiments show that
+this mismatch is enough to make the raw marginal weak for composition and
+actively harmful in a bilinear join kernel.
 
-Because OASIS operates at the marginal-statistics layer, its role in
-multi-column settings is conditional rather than automatic. It supplies
-corrected one-dimensional inputs; it does not infer dependence structure or
-repair join correlations by itself. This is why OASIS has two stages. The
-learned drift-repair stage extrapolates the post-drift marginal from the stale
-prior and recent feedback, which is what improves estimates on future, unseen
-predicates beyond the observed feedback window. Local-feedback methods are
-constrained by observed predicates and lack a learned global drift prior. But a
-globally plausible learned marginal need not be consistent with the predicates
-that were just observed, and a downstream estimator can amplify that local
-inconsistency into a much larger joint error. The second stage therefore
-projects the learned marginal onto the current feedback constraints before it is
-consumed by a downstream estimator or DBMS planner. Throughout, we write
-OASIS-noProj for the stage-one-only output
-and OASIS for the full two-stage system, which is the deployed form. The central
-empirical finding is that both
-stages are necessary---neither the learned stage nor a local-feedback projection
-alone is sufficient across single-column accuracy and downstream composition.
+The main contribution of OASIS is therefore the second task: an
+optimizer-facing Stage-2 calibration layer. The layer starts from a marginal
+prior, whether learned or heuristic, and returns a feedback-calibrated marginal
+statistics object without changing the optimizer's search procedure or cost
+model. Its hard operator is an ISOMER/IPF-style projection that exactly matches
+the active feedback constraints and is the safe choice for join and
+planner-facing use. Exact matching, however, is not uniformly best: on future
+single-column predicates it can overfit the feedback window. We therefore add a
+consistency-gated soft projection that regularizes toward the prior while
+down-weighting feedback contradicted by the most recent observations. Because no
+single operator dominates, the deployed Stage 2 is a residual-gated
+\emph{calibrated router} that chooses among stale, local-feedback, repaired,
+hard-projected, and soft-projected marginals using only the current
+feedback-window residual. A banded relaxation of the equality constraints is a
+negative result: widening the bands monotonically worsens accuracy, isolating
+the gain to regime-aware calibration and routing rather than to looser matching.
 
-A second finding concerns the Stage-2 calibration itself. Exactly matching the
-observed feedback (hard projection) is the right choice before multi-column
-composition and for the DBMS planner, where any residual one-dimensional error is
-amplified by joins. But on future single-column predicates a softer calibration
-generalizes better: it regularizes the learned marginal instead of overfitting
-the exact feedback intervals. We make this soft calibration safe with a
-\emph{consistency gate}---it down-weights feedback contradicted by the most
-recent observations rather than cutting feedback by age---and we show that no
-single Stage-2 operator dominates across both regimes. The deployed Stage 2 is
-therefore a residual-gated \emph{calibrated router} that selects, per case and
-from a deployment-visible feedback-residual signal, among the stale prior,
-ISOMER, OASIS-noProj, hard projection, and the consistency-gated soft projection.
-The router improves single-column and optimizer-facing accuracy over hard
-projection while reducing exactly to hard projection on the join kernel and the
-PostgreSQL planner, where the gate does not select soft. A simpler residual-gated
-Hybrid over stale, ISOMER, OASIS-noProj, and OASIS remains available for sparse or
-noisy feedback.
+This calibration layer is not a patch for one particular learned model. A
+Stage-1 swap experiment feeds stale statistics, simple heuristics, STHoles,
+QuickSel-H, and the OASIS MLP through the same Stage-2 protocol. The calibrated
+router improves every raw prior in aggregate and reduces feedback residuals for
+all of them, with final Q-error clustering near 1.39--1.44 across very different
+prior sources. This result changes the interpretation of the two-stage design:
+the learned Stage 1 is a useful and necessary prior source for OASIS, especially
+for drift extrapolation and out-of-distribution generalization, but the reusable
+systems contribution is the calibration layer that makes imperfect marginals
+safe to consume.
 
 The evaluation follows this scope. We evaluate the mechanism where it acts:
 future selectivity estimates, structural histogram error, downstream marginal
@@ -231,43 +228,37 @@ traces with explicit insert, update, and delete events.
 
 The contributions are:
 \begin{itemize}
-  \item We formulate feedback-driven single-column statistics correction as a
-        DBMS-facing problem---given a stale histogram and a causal window of
-        predicate feedback, produce corrected statistics that improve future
-        selectivity estimates without rescanning the table---and instantiate a
-        PostgreSQL-style adapter that maps MCV+histogram statistics to a
-        canonical quantile/CDF view and back, isolating engine-specific logic
-        from the correction model.
-  \item We design OASIS, a two-stage statistics-layer pipeline: a lightweight
-        learned model predicts corrected quantile boundaries from prior quantiles
-        and heterogeneous feedback, and a feedback-consistency projection
-        calibrates the learned marginal before it is exposed downstream.
-  \item We show that both stages are necessary and that the projection is part of
-        the method, not optional post-processing. The learned stage extrapolates
-        drift beyond the observed feedback window, while local-feedback methods
-        are constrained by observed predicates and do not learn a reusable global
-        drift-repair function. Its raw output is not feedback-consistent and is
-        amplified by downstream composition; in the bilinear FactorJoin join
-        kernel the stage-one marginal is actively worse than stale, a failure
-        the projection mitigates.
-  \item We show that the Stage-2 calibration is regime-dependent and design a
-        consistency-gated soft projection plus a residual-gated calibrated router
-        that resolves it. The soft projection down-weights feedback contradicted
-        by the most recent observations; the router selects per case from a
-        deployment-visible signal, improving single-column Q-error (1.442 to
-        1.395) and optimizer-proxy selectivity Q-error (1.446 to 1.396) over hard
-        projection while reducing to hard projection on FactorJoin and the
-        PostgreSQL plan-shape batch. We also report a negative result: a banded
-        (uncertainty-relaxed) projection does not help, isolating the gain to the
-        router rather than to relaxed matching.
-  \item We give an optimizer-facing evaluation that measures the mechanism where
-        it acts, without query runtime: single-column drift, structural and
-        initial-distribution generalization, a six-estimator composition family
-        (independence, IPF/Sinkhorn, and Gaussian/Clayton/Gumbel/Frank copulas)
-        and the FactorJoin join kernel that consume OASIS as a drop-in marginal
-        source, a 12-configuration PostgreSQL planner-only statistics-injection
-        study, and deployment-safety checks under sparse, noisy, and
-        trace-grounded feedback.
+  \item We formulate feedback-driven marginal-statistics repair as a
+        DBMS-facing calibration problem: given a stale histogram, a causal
+        feedback window, and a marginal prior from any repair source, produce
+        optimizer-consumable statistics without rescanning the table or changing
+        the optimizer. We instantiate a PostgreSQL-style adapter that maps
+        MCV+histogram statistics to a canonical quantile/CDF view and back.
+  \item We design OASIS around a reusable Stage-2 calibration layer. The layer
+        combines hard feedback-consistency projection, consistency-gated soft
+        projection, and a residual-gated calibrated router that chooses per case
+        from deployment-visible feedback residuals. A banded projection is
+        reported as a negative result, separating routing/calibration gains from
+        simple constraint relaxation.
+  \item We instantiate Stage 1 with a lightweight learned marginal-prior
+        generator and show why a useful prior still matters: under a fixed
+        projection operator the learned prior improves future-predicate Q-error
+        over projection from stale statistics, and the raw learned prior
+        generalizes well on strong out-of-distribution batch drift. At the same
+        time, a Stage-1 swap shows that Stage 2 is estimator-agnostic across
+        stale, heuristic, STHoles, QuickSel-H, and OASIS-MLP priors.
+  \item We show that calibration is necessary for downstream and planner safety.
+        Raw repaired marginals are not feedback-consistent, give weak and
+        unstable composition gains, and are actively worse than stale in the
+        FactorJoin join kernel; calibrated marginals improve every estimator in a
+        six-member composition family and reduce PostgreSQL new plan deviations
+        from 13.8\% to 1.1\%.
+  \item We give an optimizer-facing evaluation, without query runtime, spanning
+        single-column drift, structural and initial-distribution generalization,
+        a six-estimator composition family, the FactorJoin join kernel, a
+        12-configuration PostgreSQL planner-only statistics-injection study, and
+        deployment-safety checks under sparse, noisy, and trace-grounded
+        feedback.
 \end{itemize}
 
 \section{Background and Problem Formulation}
@@ -334,9 +325,9 @@ optimizers already consume.
 
 OASIS sits between the statistics store and the optimizer. When the optimizer
 requests a histogram, OASIS reconstructs a canonical quantile representation,
-retrieves a recent observation window for the column, predicts corrected
-quantile boundaries (Stage 1), applies a feedback-consistency projection
-(Stage 2), and returns an engine-native statistics object to the CBO. Query execution remains
+retrieves a recent observation window for the column, obtains a marginal prior
+from a Stage-1 repair source, calibrates that prior with the Stage-2 router, and
+returns an engine-native statistics object to the CBO. Query execution remains
 unchanged except for lightweight per-conjunct feedback collection.
 
 \subsection{Feature Representation}
@@ -350,19 +341,24 @@ selectivity, actual selectivity, and recency. The mask block marks valid
 observation slots. In our implementation $B=10$ and $K=16$, producing a compact
 input representation.
 
-\subsection{Correction Model}
+\subsection{Stage 1: Marginal Prior Generation}
 
-OASIS uses a pooled MLP with a prior encoder, an observation encoder, an
-attention-like pooling layer over the observation window, and a residual output
-head that predicts corrections to the internal quantile boundaries. Residual
-prediction encourages conservative behavior when the feedback window is
-uninformative. The predicted boundaries are clamped to the normalized domain
-and projected into monotone order to ensure a valid CDF.
+The Stage-1 component supplies a marginal prior to the calibration layer. In the
+main OASIS instantiation, this prior is produced by a pooled MLP with a prior
+encoder, an observation encoder, an attention-like pooling layer over the
+observation window, and a residual output head that predicts corrections to the
+internal quantile boundaries. Residual prediction encourages conservative
+behavior when the feedback window is uninformative. The predicted boundaries are
+clamped to the normalized domain and projected into monotone order to ensure a
+valid CDF.
 
 The model is trained offline on simulation-derived compound drift. Each
 training sample contains a stale prior, a causal feedback window, and
 post-drift quantile targets. Once trained, the same checkpoint is reused across
-columns in the evaluation; no per-table or per-distribution retuning is used.
+columns in the evaluation; no per-table or per-distribution retuning is used. The
+Stage-2 calibration layer is not tied to this particular prior source:
+Section~\ref{sec:stage1-swap} also feeds stale, heuristic, STHoles, and
+QuickSel-H marginals into the same calibration protocol.
 
 \subsection{Feedback Collection and Integration}
 \label{sec:integration}
@@ -386,35 +382,37 @@ apply correction on the canonical view, and decompose the corrected view back
 into native statistics fields. This paper validates the PostgreSQL-style
 MCV+histogram instantiation; other engines require their own adapter logic.
 
-\subsection{Stage 2: Feedback-Consistency Projection}
+\subsection{Stage 2: Regime-Aware Feedback Calibration}
 \label{sec:oasis-proj}
 
-The learned stage (Stage 1) predicts a global marginal correction from learned
-drift patterns; we call this stage-one-only output OASIS-noProj. For planner use,
-however, the corrected CDF must also be reliable near the predicates that have
-just been observed. This local requirement is especially important before
-multi-column composition, where a small one-dimensional CDF mismatch can become a
-larger joint-selectivity error. The second stage therefore applies a lightweight
-projection after the Stage-1 prediction. The projection uses the OASIS-noProj
-histogram as the starting point and adjusts it to satisfy the current feedback
-constraints under an ISOMER/IPF-style consistency principle. This step remains a
-single-column calibration layer; it does not estimate multi-column dependence.
+The Stage-2 component takes a marginal prior and calibrates it against the
+current feedback window before the marginal reaches a downstream estimator or a
+DBMS planner. When the prior is the OASIS MLP output, we call the raw
+stage-one-only marginal OASIS-noProj; when hard projection is applied to that
+prior, we call the result OASIS. When the same hard projection is initialized
+from the stale histogram, it corresponds to the local-feedback ISOMER baseline.
+This separation is important: prior generation controls how far the correction
+can extrapolate beyond observed predicates, while Stage 2 controls whether the
+statistics object is safe to compose, join, or inject into a planner. Stage 2
+remains a single-column calibration layer; it does not estimate multi-column
+dependence.
 
 \paragraph{Hard projection.}
 The default Stage-2 operator builds the interval partition induced by the active
-feedback predicates, initializes cell masses from the OASIS-noProj histogram, and
+feedback predicates, initializes cell masses from the supplied marginal prior, and
 performs cyclic I-projections so that every active predicate's interval mass
 matches its observed selectivity exactly. When sequential drift makes the active
 set inconsistent, the oldest constraints are dropped first, an implicit
 stale-feedback filter. We denote the resulting two-stage output OASIS; it is the
-safe form for downstream composition and the DBMS planner.
+safe form for downstream composition and the DBMS planner when the supplied prior
+is the learned OASIS marginal.
 
 \paragraph{Consistency-gated soft projection.}
 Exact matching is not always optimal. On \emph{future} single-column predicates,
 matching a handful of recent feedback intervals exactly can overfit them; a
 softer calibration that regularizes toward the learned marginal generalizes
 better. We therefore add a soft Stage-2 operator that minimizes
-$\mathrm{KL}(p\,\|\,p_{\text{noProj}}) + \lambda \sum_j w_j (A_j p - y_j)^2$ over
+$\mathrm{KL}(p\,\|\,p_{\text{prior}}) + \lambda \sum_j w_j (A_j p - y_j)^2$ over
 the same partition, where $A_j$ is a feedback interval mask and $y_j$ its
 observed selectivity. The crucial component is the weight $w_j$: rather than
 discarding old feedback by age, we discard it by \emph{inconsistency with the
@@ -452,15 +450,17 @@ remains available where the soft candidate is unnecessary.
 \section{Experimental Methodology}
 \label{sec:experiments}
 
-The evaluation asks five questions. First, does the statistics-format
-conversion preserve probability mass and selectivity estimates? Second, how
-much does OASIS improve single-column histogram quality under drift? Third,
-when do corrected marginals compose safely with downstream multi-column
-estimators, and when is feedback consistency required? Fourth, do corrected
-statistics affect a real PostgreSQL optimizer pipeline in the intended
-direction, without measuring runtime? Fifth, what safety checks are needed
-when feedback is sparse, noisy, or trace-like rather than drawn from the
-training generator?
+The evaluation asks six questions. First, does the statistics-format conversion
+preserve probability mass and selectivity estimates? Second, how much does a
+learned marginal prior improve single-column histogram quality under drift?
+Third, when is Stage-2 calibration needed for downstream composition and planner
+safety? Fourth, is the calibration operator regime-dependent, and can a
+deployment-visible router select among hard and soft variants safely? Fifth, is
+the Stage-2 calibration layer tied to the OASIS MLP or reusable across other
+marginal priors? Sixth, do corrected statistics affect a real PostgreSQL
+optimizer pipeline in the intended direction, and what safety checks are needed
+when feedback is sparse, noisy, or trace-like rather than drawn from the training
+generator?
 
 Unless otherwise stated, OASIS is trained once on Gaussian compound drift with
 $q\in\{1,3,5,10,15,20\}$ and evaluated on held-out drift intensities
@@ -591,7 +591,7 @@ OASIS checkpoint, and evaluates each Stage-2 variant on held-out future
 predicates per case (geometric-mean selectivity Q-error), together with the
 feedback residual on the observation window, quantile MAE against fresh
 statistics, and an optimizer-proxy join regret. It is a controlled comparison of
-calibration operators, not a new training protocol.
+calibration operators for a fixed learned prior, not a new training protocol.
 
 \input{../experiments/results/stage2_calibration_20260531/table_stage2_calibration_main.tex}
 
@@ -607,9 +607,11 @@ variant keeps old feedback that the recent observations do not contradict and
 reaches 1.401 at a lower feedback residual than the fixed window. The calibrated
 router, selecting per case by feedback residual over
 $\{$stale, ISOMER, OASIS-noProj, hard, conflict-aware soft$\}$, is best overall at
-1.395 with the lowest feedback residual (0.0358), lowest join regret (1.0302), and
-lowest new-risk loss (1.37\% versus hard 1.81\%); it routes to soft on 44\% of
-cases and to hard/ISOMER/OASIS-noProj otherwise. As a negative control, a banded
+1.395 among deployable variants, with low feedback residual (0.0358), the best
+deployable join regret (1.0302), and the lowest deployable new-risk loss
+(1.37\% versus hard 1.81\%); it
+routes to soft on 44\% of cases and to hard/ISOMER/OASIS-noProj otherwise. As a
+negative control, a banded
 projection that relaxes the equality constraints into confidence bands
 $y_j\pm\kappa\sqrt{y_j(1-y_j)}$ monotonically worsens single-column Q-error as
 $\kappa$ grows (1.437, 1.450, 1.470, 1.509 for $\kappa\in\{0.04,0.10,0.20,0.35\}$),
@@ -628,6 +630,39 @@ selected. On the FactorJoin kernel the residual-gated router stays at hard level
 calibrated router is therefore $\ge$ hard projection on single-column and
 optimizer-facing accuracy and equal to the deployed Hybrid on join and planner
 safety.
+
+\subsection{Estimator-Agnostic Calibration}
+\label{sec:stage1-swap}
+
+The preceding calibration study fixes the Stage-1 prior to the OASIS MLP. To
+test whether the Stage-2 layer is a reusable calibration mechanism rather than
+an OASIS-specific patch, we run a Stage-1 prior-source swap. The experiment uses
+the same cached drift cases, the same feedback windows, and the same future
+predicate protocol as Section~\ref{sec:stage2-calibration}. We vary only the
+marginal prior supplied to Stage 2: stale statistics, two simple feedback
+heuristics (LinInterp and FeedAvg), STHoles, QuickSel-H, and the OASIS MLP. For
+each prior we report the raw marginal, hard projection initialized from that
+prior, and the calibrated router over
+$\{$stale, ISOMER, raw prior, hard projection, conflict-aware soft projection$\}$.
+
+\input{../experiments/results/stage1_estimator_swap_20260531/table_stage1_estimator_swap.tex}
+
+Table~\ref{tab:stage1_estimator_swap} shows that Stage 2 is not tied to the
+learned OASIS prior. Hard projection improves every raw prior, and the calibrated
+router further improves every prior in aggregate, reducing future-predicate
+Q-error by 11.3\%--41.9\% relative to the corresponding raw marginal. Feedback
+residuals follow the same pattern: raw marginals have residuals between 0.0542
+and 0.1256, while the routed marginals fall to 0.0347--0.0383. The router's
+choices are also distributed across candidates rather than always selecting the
+OASIS MLP path: depending on the prior source, it routes to soft projection on
+44\%--61\% of cases, to ISOMER on 19\%--38\%, to hard projection on up to 22\%,
+and occasionally to the raw or stale candidate. Per-drift breakdowns show three
+small QuickSel-H cases where hard projection is slightly lower than the router,
+so the conclusion is aggregate/source-level rather than pointwise dominance over
+hard. The broader conclusion is nevertheless direct: Stage 2 is an
+estimator-agnostic calibration layer. The OASIS MLP remains useful as a learned
+prior generator, but the reusable optimizer-facing mechanism is the calibration
+layer that can accept multiple imperfect marginal sources.
 
 \subsection{Out-of-Distribution Drift Realism}
 \label{sec:ood-drift-realism}
@@ -1148,47 +1183,42 @@ hard projection over ISOMER on planner-facing cases is left to future work.
 \label{sec:conclusion}
 
 OASIS repairs stale single-column optimizer statistics from query feedback
-without rescanning tables or modifying the optimizer. It is a two-stage pipeline:
-a compact learned model predicts corrected quantile boundaries from a stale prior
-and recent observations, and a feedback-consistency projection then calibrates
-the learned marginal before it is exposed downstream; a PostgreSQL-style adapter
-connects the canonical correction view to DBMS-native statistics.
+without rescanning tables or modifying the optimizer. The main lesson is that
+feedback-driven statistics repair should be separated into two questions: how to
+generate a useful marginal prior, and how to calibrate that imperfect prior so it
+is safe for optimizer consumption. The learned OASIS MLP answers the first
+question for our system by extrapolating drift beyond the observed feedback
+window. Under a fixed projection operator, the learned prior improves held-out
+future-predicate Q-error over projection from stale statistics, and it is
+especially useful on strong out-of-distribution batch drift.
 
-The central lesson is that both stages are necessary, and they answer
-complementary failure modes. The learned stage extrapolates drift to future,
-unseen predicates by using a learned global drift prior, while local-feedback
-methods such as ISOMER are constrained by observed feedback. This drives the
-single-column gains across synthetic drift, OOD families, and distribution
-transfer. But a globally plausible learned marginal need not be consistent with
-the predicates just observed, and downstream estimators amplify that
-inconsistency: the stage-one marginal gives only weak and unstable multi-column
-gains and is actively harmful in the bilinear FactorJoin join kernel. The
-projection stage mitigates this downstream failure, at the cost of a small amount
-of single-column peak accuracy. A further lesson is that this Stage-2 calibration
-is regime-dependent: hard projection is best for join and planner safety, while a
-consistency-gated soft projection---which down-weights feedback contradicted by
-the most recent observations---generalizes better on future single-column and
-optimizer-facing predicates. Because no single operator dominates, the deployed
-Stage 2 is a residual-gated calibrated router that selects per case from a
-deployment-visible signal; it lowers single-column Q-error from 1.442 to 1.395 and
-optimizer-proxy selectivity Q-error from 1.446 to 1.396 over hard projection,
-recovering the projection's single-column cost, while reducing exactly to hard
-projection or ISOMER on the join kernel and PostgreSQL planner, where it never
-routes to soft. A banded relaxation of the equality constraints was a negative
-control that localizes the gain to routing rather than to relaxed matching.
-Because OASIS acts at the marginal layer, it embeds as a
-drop-in marginal source for existing composition estimators, improving every
-member of a six-estimator family by 22\%--38\%. In FactorJoin, OASIS-noProj is
-harmful, while the full OASIS recovers stable join-cardinality gains. In the
-12-configuration PostgreSQL planner-only batch, OASIS reduces aggregate
-row-estimation Q-error from 27.748 to 2.360, matches the fresh-statistics plan
-shape on 96.1\% of queries, and keeps new plan deviations near 1\%---where the
-learned stage alone would introduce them---without measuring or claiming query
-runtime improvement. A residual-gated Hybrid policy, choosing among stale,
-ISOMER, OASIS-noProj, and OASIS from the current feedback residual, reduces
-aggregate trace-grounded Q-error from 1.295 to 1.072. This makes OASIS a
-practical component for maintaining optimizer-facing statistics between scheduled
-\texttt{ANALYZE} passes.
+The paper's deployment contribution is the second question: regime-aware
+feedback calibration. A raw repaired marginal, even a useful learned one, need
+not be locally consistent with the predicates just observed. Downstream
+estimators amplify that inconsistency: OASIS-noProj gives weak and unstable
+multi-column gains and is actively harmful in the bilinear FactorJoin join
+kernel. Hard feedback projection makes the marginal safe for composition and
+planner-facing use, improving every member of a six-estimator composition family
+by 22\%--38\%, recovering stable FactorJoin gains, and reducing PostgreSQL new
+plan deviations from 13.8\% to 1.1\% while lowering aggregate row-estimation
+Q-error from 27.748 to 2.360.
+
+Calibration itself is regime-dependent. Hard projection is the right anchor for
+joins and the DBMS planner, whereas a consistency-gated soft projection
+generalizes better on future single-column and optimizer-facing predicates. The
+residual-gated calibrated router resolves this split using only
+deployment-visible feedback residuals: it lowers single-column Q-error from
+1.442 to 1.395 and optimizer-proxy selectivity Q-error from 1.446 to 1.396 over
+hard projection, while reducing to hard projection or ISOMER on the join kernel
+and PostgreSQL planner where soft projection is not selected. The banded
+projection negative result shows that the improvement is not a consequence of
+loosening constraints; it comes from choosing the right calibration regime.
+Finally, the Stage-1 prior-source swap shows that this layer is not tied to the
+OASIS MLP: the same Stage-2 router improves stale, heuristic, STHoles,
+QuickSel-H, and learned priors in aggregate. This makes OASIS a practical
+feedback-calibrated statistics layer for maintaining optimizer-facing marginals
+between scheduled \texttt{ANALYZE} passes. No query runtime improvement is
+measured or claimed.
 
 \appendix
 

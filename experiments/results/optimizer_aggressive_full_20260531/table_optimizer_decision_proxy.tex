@@ -1,0 +1,20 @@
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Generator-driven optimizer-decision proxy. Q-Error and regret are geometric means; regret is true proxy cost of the plan selected from estimated statistics divided by the true optimal proxy cost ($1.0$ is optimal). No query runtime is measured.}
+  \label{tab:optimizer_decision_proxy}
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Method & Sel. QE & Join Regret & Join Opt. & Fresh Match & Risk Resolved \\
+    \midrule
+    Stale & 2.416 & 1.140 & 82.8\% & 82.8\% & 0.0\% \\
+    ISOMER & 1.532 & 1.047 & 90.7\% & 90.7\% & 54.5\% \\
+    OASIS & 1.646 & 1.050 & 90.4\% & 90.4\% & 62.0\% \\
+    OASIS-Proj & 1.446 & 1.035 & 92.2\% & 92.2\% & 67.9\% \\
+    Hybrid & 1.430 & 1.033 & 92.3\% & 92.3\% & 65.7\% \\
+    Aggressive & 1.429 & 1.032 & 92.4\% & 92.4\% & 65.6\% \\
+    Fresh & 1.000 & 1.000 & 100.0\% & 100.0\% & 100.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}

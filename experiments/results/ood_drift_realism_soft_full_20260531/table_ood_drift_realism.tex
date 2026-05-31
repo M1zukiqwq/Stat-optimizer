@@ -1,0 +1,21 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Out-of-distribution drift realism suite. OASIS is trained only on compound drift and evaluated on deployment-inspired drift families. Values are geometric mean selectivity Q-error over held-out cases; Hybrid uses only feedback-window residuals for selection.}
+  \label{tab:ood_drift_realism}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lrrrrrrrrr}
+    \toprule
+    Drift family & Stale & ISOMER & OASIS & OASIS-Proj & Soft & Hybrid & Aggressive & Fresh & Hybrid choice \\
+    \midrule
+    Batch load & 4.203 & 1.461 & 1.280 & \textbf{1.272} & 1.482 & 1.388 & 1.402 & 1.000 & I 69\%, P 30\%, O 2\% \\
+    Range shift & 1.994 & 1.210 & 1.352 & \textbf{1.187} & 1.284 & 1.210 & 1.222 & 1.000 & I 77\%, P 23\%, O 0\% \\
+    Skew evolution & 1.540 & 1.182 & 1.437 & 1.171 & 1.174 & 1.175 & \textbf{1.170} & 1.000 & I 80\%, P 20\%, O 0\% \\
+    Outlier burst & 1.258 & 1.076 & 1.135 & \textbf{1.055} & 1.061 & 1.067 & 1.068 & 1.000 & I 64\%, P 36\%, O 0\% \\
+    Multimodal & 1.238 & 1.066 & 1.134 & \textbf{1.060} & 1.064 & 1.064 & 1.066 & 1.000 & I 62\%, P 38\%, O 0\% \\
+    Seasonal/mixed & 1.212 & 1.066 & 1.129 & \textbf{1.057} & 1.066 & 1.064 & 1.064 & 1.000 & I 70\%, P 29\%, O 1\% \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

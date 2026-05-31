@@ -1,0 +1,16 @@
+OASIS soft projection diagnostics
+============================================
+Cases: 384
+
+Future selectivity Q-error (geomean), lower is better:
+  hard           1.4494
+  soft_full      1.3930
+  soft_recent    1.4010
+  soft_conflict  1.3948
+
+Mean obs/case: 14.08; hard active suffix len: 5.61
+Mean old obs: 6.08; old-consistent: 3.47; old-conflicted: 2.61
+conflict-aware beats fixed recent window on future Q-error in 52.9% of cases (mean delta +0.0084)
+cases with >=1 consistent old obs: 90.1%
+  mean conflict-vs-recent delta | consistent-old present: +0.0093
+  mean conflict-vs-recent delta | no consistent-old:     -0.0001

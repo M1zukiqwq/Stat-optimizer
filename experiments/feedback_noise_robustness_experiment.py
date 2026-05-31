@@ -33,15 +33,12 @@ from mlp_histogram_model_v2 import MlpHistogramModelV2
 from optimizer_decision_proxy_experiment import (
     METHOD_ORDER,
     CostProxyConfig,
+    build_method_boundaries,
     boundaries_from_quantiles,
-    choose_hybrid,
     estimate_selectivity,
     generate_predicates,
     geomean,
-    isomer_boundaries,
     iter_sample_paths,
-    oasis_boundaries,
-    observations_to_dicts,
     pct_improvement,
     qerr,
     regret_for_join,
@@ -101,22 +98,12 @@ def build_boundaries(
     num_buckets: int,
     model_window: int,
 ) -> Tuple[Dict[str, List[float]], str]:
-    observations = observations_to_dicts(sample)
-    stale = boundaries_from_quantiles(sample.prior.quantile_values)
-    fresh = boundaries_from_quantiles(sample.corrected_quantile_values or sample.prior.quantile_values)
-    isomer = isomer_boundaries(stale, observations, num_buckets)
-    oasis = oasis_boundaries(sample, model, model_window)
-    oasis_projected = isomer_boundaries(oasis, observations, num_buckets)
-    method_boundaries = {
-        "stale": stale,
-        "isomer": isomer,
-        "oasis": oasis,
-        "oasis_projected": oasis_projected,
-        "fresh": fresh,
-    }
-    hybrid_choice, hybrid = choose_hybrid(method_boundaries, observations)
-    method_boundaries["hybrid"] = hybrid
-    return method_boundaries, hybrid_choice
+    return build_method_boundaries(
+        sample,
+        model=model,
+        num_buckets=num_buckets,
+        max_observations=model_window,
+    )
 
 
 def aggregate_rows(rows: Sequence[NoiseDecisionRow], risk_threshold: float) -> List[dict]:
@@ -190,6 +177,7 @@ def method_label(method: str) -> str:
         "oasis": "OASIS",
         "oasis_projected": "OASIS-Proj",
         "hybrid": "Hybrid",
+        "aggressive_hybrid": "Aggressive",
         "fresh": "Fresh",
     }[method]
 
@@ -209,9 +197,9 @@ def write_latex_table(output_dir: Path, summary: Sequence[dict], hybrid_choices:
         handle.write("  \\label{tab:feedback_noise_robustness}\n")
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
-        handle.write("  \\begin{tabular}{lrrrrrrrr}\n")
+        handle.write("  \\begin{tabular}{lrrrrrrrrr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    Noise & Stale QE & ISOMER QE & OASIS QE & Proj QE & Hybrid QE & OASIS JoinOpt & Proj JoinOpt & Hybrid JoinOpt \\\\\n")
+        handle.write("    Noise & Stale QE & ISOMER QE & OASIS QE & Proj QE & Hybrid QE & Aggressive QE & OASIS JoinOpt & Proj JoinOpt & Hybrid JoinOpt \\\\\n")
         handle.write("    \\midrule\n")
         for sigma in sorted(hybrid_choices):
             stale = by_key[(sigma, "stale")]
@@ -219,10 +207,12 @@ def write_latex_table(output_dir: Path, summary: Sequence[dict], hybrid_choices:
             oasis = by_key[(sigma, "oasis")]
             projected = by_key[(sigma, "oasis_projected")]
             hybrid = by_key[(sigma, "hybrid")]
+            aggressive = by_key[(sigma, "aggressive_hybrid")]
             handle.write(
                 f"    {noise_label(sigma)} & {stale['selectivity_qerr_gm']:.3f} & "
                 f"{isomer['selectivity_qerr_gm']:.3f} & {oasis['selectivity_qerr_gm']:.3f} & "
                 f"{projected['selectivity_qerr_gm']:.3f} & {hybrid['selectivity_qerr_gm']:.3f} & "
+                f"{aggressive['selectivity_qerr_gm']:.3f} & "
                 f"{oasis['join_optimal_match_frac'] * 100:.1f}\\% & "
                 f"{projected['join_optimal_match_frac'] * 100:.1f}\\% & "
                 f"{hybrid['join_optimal_match_frac'] * 100:.1f}\\% \\\\\n"

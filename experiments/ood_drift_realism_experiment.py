@@ -35,17 +35,24 @@ from histogram_math import clamp01, evaluate_piecewise_cdf
 from histogram_types import DEFAULT_QUANTILE_LEVELS, FeedbackObservation, KllFeedbackSample, KllPrior
 from mlp_histogram_model_v2 import MlpHistogramModelV2
 from optimizer_decision_proxy_experiment import (
+    build_method_boundaries,
     boundaries_from_quantiles,
-    choose_hybrid,
     estimate_selectivity,
     feedback_residual,
-    isomer_boundaries,
-    oasis_boundaries,
     observations_to_dicts,
 )
 
 
-METHOD_ORDER = ["stale", "isomer", "oasis", "oasis_projected", "hybrid", "fresh"]
+METHOD_ORDER = [
+    "stale",
+    "isomer",
+    "oasis",
+    "oasis_projected",
+    "oasis_soft_projection",
+    "hybrid",
+    "aggressive_hybrid",
+    "fresh",
+]
 PATTERN_ORDER = [
     DriftPattern.BATCH_LOAD,
     DriftPattern.RANGE_SHIFT,
@@ -74,7 +81,9 @@ def method_label(method: str) -> str:
         "isomer": "ISOMER",
         "oasis": "OASIS",
         "oasis_projected": "OASIS-Proj",
+        "oasis_soft_projection": "OASIS-Soft",
         "hybrid": "Hybrid",
+        "aggressive_hybrid": "Aggressive",
         "fresh": "Fresh",
     }[method]
 
@@ -260,23 +269,42 @@ def build_case(
     )
 
 
-def method_boundaries(sample: KllFeedbackSample, model: MlpHistogramModelV2, num_buckets: int, model_window: int) -> Tuple[Dict[str, List[float]], str]:
-    observations = observations_to_dicts(sample)
-    stale = boundaries_from_quantiles(sample.prior.quantile_values)
-    fresh = boundaries_from_quantiles(sample.corrected_quantile_values or sample.prior.quantile_values)
-    isomer = isomer_boundaries(stale, observations, num_buckets)
-    oasis = oasis_boundaries(sample, model, model_window)
-    oasis_projected = isomer_boundaries(oasis, observations, num_buckets)
-    boundaries = {
-        "stale": stale,
-        "isomer": isomer,
-        "oasis": oasis,
-        "oasis_projected": oasis_projected,
-        "fresh": fresh,
-    }
-    hybrid_choice, hybrid = choose_hybrid(boundaries, observations)
-    boundaries["hybrid"] = hybrid
-    return boundaries, hybrid_choice
+def method_boundaries(
+    sample: KllFeedbackSample,
+    model: MlpHistogramModelV2,
+    num_buckets: int,
+    model_window: int,
+    soft_projection_strength: float = 30.0,
+    soft_projection_recency_decay: float = 0.80,
+    soft_projection_target_blend: float = 1.0,
+    soft_projection_window: int = 0,
+    soft_projection_iters: int = 500,
+    soft_projection_lr: float = 0.05,
+    soft_projection_tol: float = 1e-9,
+    soft_projection_active_set: bool = False,
+    soft_projection_conflict_aware: bool = False,
+    soft_projection_conflict_ref_window: int = 8,
+    soft_projection_conflict_tau: float = 0.05,
+    soft_projection_conflict_floor: float = 0.0,
+) -> Tuple[Dict[str, List[float]], str]:
+    return build_method_boundaries(
+        sample,
+        model=model,
+        num_buckets=num_buckets,
+        max_observations=model_window,
+        soft_projection_strength=soft_projection_strength,
+        soft_projection_recency_decay=soft_projection_recency_decay,
+        soft_projection_target_blend=soft_projection_target_blend,
+        soft_projection_window=soft_projection_window,
+        soft_projection_iters=soft_projection_iters,
+        soft_projection_lr=soft_projection_lr,
+        soft_projection_tol=soft_projection_tol,
+        soft_projection_active_set=soft_projection_active_set,
+        soft_projection_conflict_aware=soft_projection_conflict_aware,
+        soft_projection_conflict_ref_window=soft_projection_conflict_ref_window,
+        soft_projection_conflict_tau=soft_projection_conflict_tau,
+        soft_projection_conflict_floor=soft_projection_conflict_floor,
+    )
 
 
 def metric_points(seed: int, count: int) -> List[float]:
@@ -324,22 +352,26 @@ def write_table(output_dir: Path, summary: Sequence[dict]) -> None:
         handle.write("  \\label{tab:ood_drift_realism}\n")
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
-        handle.write("  \\begin{tabular}{lrrrrrrr}\n")
+        handle.write("  \\begin{tabular}{lrrrrrrrrr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    Drift family & Stale & ISOMER & OASIS & OASIS-Proj & Hybrid & Fresh & Hybrid choice \\\\\n")
+        handle.write("    Drift family & Stale & ISOMER & OASIS & OASIS-Proj & Soft & Hybrid & Aggressive & Fresh & Hybrid choice \\\\\n")
         handle.write("    \\midrule\n")
         for pattern in [pattern.value for pattern in PATTERN_ORDER]:
             stale = by_key[(pattern, "stale")]
             isomer = by_key[(pattern, "isomer")]
             oasis = by_key[(pattern, "oasis")]
             projected = by_key[(pattern, "oasis_projected")]
+            soft = by_key[(pattern, "oasis_soft_projection")]
             hybrid = by_key[(pattern, "hybrid")]
+            aggressive = by_key[(pattern, "aggressive_hybrid")]
             fresh = by_key[(pattern, "fresh")]
             method_values = {
                 "isomer": isomer["qerror_gm"],
                 "oasis": oasis["qerror_gm"],
                 "oasis_projected": projected["qerror_gm"],
+                "oasis_soft_projection": soft["qerror_gm"],
                 "hybrid": hybrid["qerror_gm"],
+                "aggressive_hybrid": aggressive["qerror_gm"],
             }
             best_method = min(method_values, key=method_values.get)
 
@@ -355,8 +387,9 @@ def write_table(output_dir: Path, summary: Sequence[dict]) -> None:
             handle.write(
                 f"    {pattern_label(pattern)} & {stale['qerror_gm']:.3f} & "
                 f"{fmt('isomer', isomer['qerror_gm'])} & {fmt('oasis', oasis['qerror_gm'])} & "
-                f"{fmt('oasis_projected', projected['qerror_gm'])} & {fmt('hybrid', hybrid['qerror_gm'])} & "
-                f"{fresh['qerror_gm']:.3f} & {choice_text} \\\\\n"
+                f"{fmt('oasis_projected', projected['qerror_gm'])} & {fmt('oasis_soft_projection', soft['qerror_gm'])} & "
+                f"{fmt('hybrid', hybrid['qerror_gm'])} & "
+                f"{fmt('aggressive_hybrid', aggressive['qerror_gm'])} & {fresh['qerror_gm']:.3f} & {choice_text} \\\\\n"
             )
         handle.write("    \\bottomrule\n")
         handle.write("  \\end{tabular}%\n")
@@ -391,15 +424,16 @@ def write_summary_text(output_dir: Path, summary: Sequence[dict], hybrid_choices
         "=" * 32,
         "OASIS checkpoint is trained on compound drift only.",
         "",
-        "Pattern        Stale  ISOMER  OASIS  Proj  Hybrid  Fresh",
-        "-" * 68,
+        "Pattern        Stale  ISOMER  OASIS  Proj   Soft  Hybrid  Aggressive  Fresh",
+        "-" * 90,
     ]
     for pattern in [pattern.value for pattern in PATTERN_ORDER]:
         row = lambda method: by_key[(pattern, method)]["qerror_gm"]
         lines.append(
             f"{pattern:<14s} {row('stale'):5.3f}  {row('isomer'):6.3f}  "
             f"{row('oasis'):5.3f}  {row('oasis_projected'):5.3f}  "
-            f"{row('hybrid'):6.3f}  {row('fresh'):5.3f}"
+            f"{row('oasis_soft_projection'):5.3f}  {row('hybrid'):6.3f}  "
+            f"{row('aggressive_hybrid'):10.3f}  {row('fresh'):5.3f}"
         )
         total = sum(hybrid_choices[pattern].values())
         if total:
@@ -425,7 +459,24 @@ def run_experiment(args: argparse.Namespace) -> None:
         for case_id in range(args.cases_per_pattern):
             sample = build_case(pattern, case_id, args)
             true_boundaries = boundaries_from_quantiles(sample.corrected_quantile_values or sample.prior.quantile_values)
-            boundaries, hybrid_choice = method_boundaries(sample, model, args.num_buckets, model_window)
+            boundaries, hybrid_choice = method_boundaries(
+                sample,
+                model,
+                args.num_buckets,
+                model_window,
+                soft_projection_strength=args.soft_projection_strength,
+                soft_projection_recency_decay=args.soft_projection_recency_decay,
+                soft_projection_target_blend=args.soft_projection_target_blend,
+                soft_projection_window=args.soft_projection_window,
+                soft_projection_iters=args.soft_projection_iters,
+                soft_projection_lr=args.soft_projection_lr,
+                soft_projection_tol=args.soft_projection_tol,
+                soft_projection_active_set=args.soft_projection_active_set,
+                soft_projection_conflict_aware=args.soft_projection_conflict_aware,
+                soft_projection_conflict_ref_window=args.soft_projection_conflict_ref_window,
+                soft_projection_conflict_tau=args.soft_projection_conflict_tau,
+                soft_projection_conflict_floor=args.soft_projection_conflict_floor,
+            )
             hybrid_choices[pattern.value][hybrid_choice] += 1
             points = metric_points(args.seed + PATTERN_ORDER.index(pattern) * 100_000 + case_id, args.metric_points)
             observations = observations_to_dicts(sample)
@@ -465,6 +516,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--observations", type=int, default=16)
     parser.add_argument("--num-buckets", type=int, default=10)
     parser.add_argument("--metric-points", type=int, default=64)
+    parser.add_argument("--soft-projection-strength", type=float, default=30.0)
+    parser.add_argument("--soft-projection-recency-decay", type=float, default=0.80)
+    parser.add_argument("--soft-projection-target-blend", type=float, default=1.0)
+    parser.add_argument("--soft-projection-window", type=int, default=0,
+                        help="Use only the most recent N observations for soft projection; 0 uses the full window.")
+    parser.add_argument("--soft-projection-iters", type=int, default=500)
+    parser.add_argument("--soft-projection-lr", type=float, default=0.05)
+    parser.add_argument("--soft-projection-tol", type=float, default=1e-9)
+    parser.add_argument("--soft-projection-active-set", action="store_true",
+                        help="Apply soft projection only to the latest hard-feasible feedback suffix.")
+    parser.add_argument("--soft-projection-conflict-aware", action="store_true",
+                        help="Down-weight feedback constraints contradicted by the most recent observations.")
+    parser.add_argument("--soft-projection-conflict-ref-window", type=int, default=8,
+                        help="Number of most-recent observations treated as the trusted conflict reference.")
+    parser.add_argument("--soft-projection-conflict-tau", type=float, default=0.05,
+                        help="Conflict bandwidth; smaller tau suppresses contradicted observations more aggressively.")
+    parser.add_argument("--soft-projection-conflict-floor", type=float, default=0.0,
+                        help="Minimum residual weight for a contradicted observation (0 fully removes it).")
     parser.add_argument("--seed", type=int, default=20260529)
     parser.add_argument("--write-rows", action="store_true")
     return parser.parse_args()

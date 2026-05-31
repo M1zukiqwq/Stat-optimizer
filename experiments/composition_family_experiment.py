@@ -25,7 +25,8 @@ from a single fixed source that is identical for every marginal input:
   * IPF/Sinkhorn-2D seeds its association (cell odds-ratios) from a STALE 2D
     sketch, then reconciles it with each method's corrected 1D marginals.
 The only variable that changes across {stale, isomer, oasis, oasis_projected,
-hybrid, fresh} is the *marginal quality*. No query runtime is measured.
+oasis_soft_projection, hybrid, aggressive_hybrid, fresh} is the *marginal quality*. No query runtime is
+measured.
 
 Reuses data generation and OASIS/ISOMER correction from
 ``copula_oasis_experiment`` so the marginal-repair path is identical.
@@ -51,7 +52,7 @@ for _p in (_PIPELINE_DIR, _SCRIPT_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from modern_baselines import correct_isomer
+from modern_baselines import correct_isomer, correct_soft_isomer
 from mlp_histogram_model_v2 import MlpHistogramModelV2
 
 # Reuse the validated building blocks from the existing copula experiment.
@@ -68,10 +69,20 @@ from copula_oasis_experiment import (
     geomean,
     pct_improvement,
 )
+from factorjoin_oasis_experiment import choose_aggressive_marginal
 from histogram_math import evaluate_piecewise_cdf
 
 
-METHOD_ORDER = ["stale", "isomer", "oasis", "oasis_projected", "hybrid", "fresh"]
+METHOD_ORDER = [
+    "stale",
+    "isomer",
+    "oasis",
+    "oasis_projected",
+    "oasis_soft_projection",
+    "hybrid",
+    "aggressive_hybrid",
+    "fresh",
+]
 ESTIMATOR_ORDER = [
     "independence",
     "ipf_sinkhorn",
@@ -338,7 +349,7 @@ def run_experiment(args):
                     col_observations.append(obs_list)
 
                 # ── Marginal repair: OASIS, ISOMER, OASIS-Proj, Hybrid ──
-                oasis_bounds, isomer_bounds, oasis_projected_bounds = [], [], []
+                oasis_bounds, isomer_bounds, oasis_projected_bounds, oasis_soft_bounds = [], [], [], []
                 for c in range(2):
                     oasis_bounds.append(correct_marginal_with_oasis(
                         stale_bounds[c], col_observations[c], model,
@@ -361,6 +372,32 @@ def run_experiment(args):
                         oasis_projected_bounds.append([oasis_bounds[c][0]] + list(pq) + [oasis_bounds[c][-1]])
                     except Exception:
                         oasis_projected_bounds.append(oasis_bounds[c])
+                for c in range(2):
+                    try:
+                        soft_observations = (
+                            col_observations[c][-args.soft_projection_window:]
+                            if 0 < args.soft_projection_window < len(col_observations[c])
+                            else col_observations[c]
+                        )
+                        sq = correct_soft_isomer(
+                            oasis_bounds[c][0], oasis_bounds[c][-1],
+                            oasis_bounds[c][1:-1], soft_observations,
+                            num_buckets=args.num_buckets,
+                            constraint_strength=args.soft_projection_strength,
+                            recency_decay=args.soft_projection_recency_decay,
+                            target_blend=args.soft_projection_target_blend,
+                            max_iter=args.soft_projection_iters,
+                            learning_rate=args.soft_projection_lr,
+                            tol=args.soft_projection_tol,
+                            active_set=args.soft_projection_active_set,
+                            conflict_aware=args.soft_projection_conflict_aware,
+                            conflict_ref_window=args.soft_projection_conflict_ref_window,
+                            conflict_tau=args.soft_projection_conflict_tau,
+                            conflict_floor=args.soft_projection_conflict_floor,
+                        )
+                        oasis_soft_bounds.append([oasis_bounds[c][0]] + list(sq) + [oasis_bounds[c][-1]])
+                    except Exception:
+                        oasis_soft_bounds.append(oasis_bounds[c])
 
                 hybrid_bounds, hybrid_choices = [], []
                 for c in range(2):
@@ -373,10 +410,31 @@ def run_experiment(args):
                     hybrid_bounds.append(sb)
                     hybrid_choices.append(sm)
 
+                aggressive_bounds, aggressive_choices = [], []
+                for c in range(2):
+                    ab, am, _ = choose_aggressive_marginal(
+                        copula=copula,
+                        stale=stale_bounds[c],
+                        isomer=isomer_bounds[c],
+                        oasis=oasis_bounds[c],
+                        projected=oasis_projected_bounds[c],
+                        hybrid=hybrid_bounds[c],
+                        observations=col_observations[c],
+                        num_buckets=args.num_buckets,
+                        damping_grid=args.aggressive_damping_grid,
+                        recent_windows=args.aggressive_recent_windows,
+                        projection_iters=args.projection_iters,
+                        projection_tol=args.projection_tol,
+                    )
+                    aggressive_bounds.append(ab)
+                    aggressive_choices.append(am)
+
                 method_bounds = {
                     "stale": stale_bounds, "isomer": isomer_bounds,
                     "oasis": oasis_bounds, "oasis_projected": oasis_projected_bounds,
-                    "hybrid": hybrid_bounds, "fresh": fresh_bounds,
+                    "oasis_soft_projection": oasis_soft_bounds,
+                    "hybrid": hybrid_bounds, "aggressive_hybrid": aggressive_bounds,
+                    "fresh": fresh_bounds,
                 }
 
                 # ── IPF: one fixed stale 2D association seed, per-method marginals ──
@@ -389,7 +447,7 @@ def run_experiment(args):
 
                 # ── Evaluate joint selectivity over random 2-col range predicates ──
                 rng = random.Random(seed + 9999)
-                for _ in range(args.n_predicates):
+                for pred_id in range(args.n_predicates):
                     lo1 = rng.uniform(0.1, 0.5); hi1 = rng.uniform(lo1, 0.9)
                     lo2 = rng.uniform(0.1, 0.5); hi2 = rng.uniform(lo2, 0.9)
                     predicates = [(lo1, hi1), (lo2, hi2)]
@@ -423,12 +481,15 @@ def run_experiment(args):
                             ])
                             results.append({
                                 "estimator": estimator, "correlation": rho,
-                                "drift_q": q, "trial": trial, "method": method,
+                                "drift_q": q, "trial": trial, "predicate_id": pred_id,
+                                "method": method,
                                 "true_sel": true_sel, "est_sel": est,
                                 "joint_qerr": qerr(est, true_sel),
                                 "marginal_qerr_gm": marg_qe,
                                 "hybrid_choice_c0": hybrid_choices[0],
                                 "hybrid_choice_c1": hybrid_choices[1],
+                                "aggressive_choice_c0": aggressive_choices[0],
+                                "aggressive_choice_c1": aggressive_choices[1],
                             })
                 print("done")
 
@@ -442,26 +503,47 @@ def _summarize_and_save(results: List[dict], args):
 
     # Aggregate per (estimator, method) across all rho/q.
     by_est_method = defaultdict(list)
+    stale_by_key = {}
     for r in results:
         by_est_method[(r["estimator"], r["method"])].append(r["joint_qerr"])
+        if r["method"] == "stale":
+            key = (r["estimator"], r["correlation"], r["drift_q"], r["trial"], r["predicate_id"])
+            stale_by_key[key] = r["joint_qerr"]
 
     summary_rows = []
-    print("\n" + "=" * 110)
+    print("\n" + "=" * 126)
     print(f"{'Estimator':>16} | {'Stale':>8} | {'ISOMER':>8} | {'OASIS':>8} | "
-          f"{'OASIS-Proj':>10} | {'Hybrid':>8} | {'Fresh':>8} | {'OASIS%':>7} | {'Proj%':>7} | {'Hyb%':>7}")
-    print("=" * 110)
+          f"{'OASIS-Proj':>10} | {'Soft':>8} | {'Hybrid':>8} | {'Aggressive':>10} | {'Fresh':>8} | "
+          f"{'Proj%':>7} | {'Soft%':>7} | {'Aggr%':>7}")
+    print("=" * 126)
     for estimator in args.estimators:
         gm = {m: geomean(by_est_method[(estimator, m)]) for m in METHOD_ORDER}
         row = {"estimator": estimator, **{f"{m}_qerr_gm": gm[m] for m in METHOD_ORDER},
                "oasis_improvement_pct": pct_improvement(gm["stale"], gm["oasis"]),
                "isomer_improvement_pct": pct_improvement(gm["stale"], gm["isomer"]),
                "oasis_projected_improvement_pct": pct_improvement(gm["stale"], gm["oasis_projected"]),
-               "hybrid_improvement_pct": pct_improvement(gm["stale"], gm["hybrid"])}
+               "oasis_soft_projection_improvement_pct": pct_improvement(gm["stale"], gm["oasis_soft_projection"]),
+               "hybrid_improvement_pct": pct_improvement(gm["stale"], gm["hybrid"]),
+               "aggressive_hybrid_improvement_pct": pct_improvement(gm["stale"], gm["aggressive_hybrid"])}
+        for method in METHOD_ORDER:
+            method_rows = [r for r in results if r["estimator"] == estimator and r["method"] == method]
+            row[f"{method}_marginal_qerr_gm"] = geomean([r["marginal_qerr_gm"] for r in method_rows])
+            row[f"{method}_worse_than_stale_frac"] = (
+                sum(
+                    r["joint_qerr"] > stale_by_key.get(
+                        (r["estimator"], r["correlation"], r["drift_q"], r["trial"], r["predicate_id"]),
+                        float("inf"),
+                    )
+                    for r in method_rows
+                ) / max(len(method_rows), 1)
+            )
         summary_rows.append(row)
         print(f"{estimator:>16} | {gm['stale']:8.3f} | {gm['isomer']:8.3f} | {gm['oasis']:8.3f} | "
-              f"{gm['oasis_projected']:10.3f} | {gm['hybrid']:8.3f} | {gm['fresh']:8.3f} | "
-              f"{row['oasis_improvement_pct']:+6.1f}% | {row['oasis_projected_improvement_pct']:+6.1f}% | "
-              f"{row['hybrid_improvement_pct']:+6.1f}%")
+              f"{gm['oasis_projected']:10.3f} | {gm['oasis_soft_projection']:8.3f} | {gm['hybrid']:8.3f} | "
+              f"{gm['aggressive_hybrid']:10.3f} | {gm['fresh']:8.3f} | "
+              f"{row['oasis_projected_improvement_pct']:+6.1f}% | "
+              f"{row['oasis_soft_projection_improvement_pct']:+6.1f}% | "
+              f"{row['aggressive_hybrid_improvement_pct']:+6.1f}%")
 
     with open(output_dir / "composition_family_results.json", "w") as f:
         json.dump(results, f)
@@ -494,21 +576,26 @@ def _generate_latex_table(summary_rows, output_dir):
         f.write("  \\label{tab:composition_family}\n")
         f.write("  \\setlength{\\tabcolsep}{4pt}\n")
         f.write("  \\resizebox{\\textwidth}{!}{%\n")
-        f.write("  \\begin{tabular}{l | rrrrrr | rrr}\n    \\toprule\n")
-        f.write("    Estimator & Stale & OASIS-noProj & ISOMER & OASIS & Hybrid & Fresh & "
-                "OASIS-noProj +\\% & OASIS +\\% & Hybrid +\\% \\\\\n    \\midrule\n")
+        f.write("  \\begin{tabular}{l | rrrrrrrr | rrrr}\n    \\toprule\n")
+        f.write("    Estimator & Stale & OASIS-noProj & ISOMER & OASIS & Soft & Hybrid & Aggr. & Fresh & "
+                "OASIS-noProj +\\% & OASIS +\\% & Soft +\\% & Aggr. +\\% \\\\\n    \\midrule\n")
         for r in summary_rows:
             best = min(r["oasis_qerr_gm"], r["isomer_qerr_gm"],
-                       r["oasis_projected_qerr_gm"], r["hybrid_qerr_gm"])
+                       r["oasis_projected_qerr_gm"], r["hybrid_qerr_gm"],
+                       r["oasis_soft_projection_qerr_gm"],
+                       r["aggressive_hybrid_qerr_gm"])
             def cell(v):
                 return f"\\textbf{{{v:.3f}}}" if abs(v - best) < 1e-3 else f"{v:.3f}"
             f.write(f"    {labels.get(r['estimator'], r['estimator'])} & "
                     f"{r['stale_qerr_gm']:.3f} & {cell(r['oasis_qerr_gm'])} & "
                     f"{cell(r['isomer_qerr_gm'])} & {cell(r['oasis_projected_qerr_gm'])} & "
-                    f"{cell(r['hybrid_qerr_gm'])} & {r['fresh_qerr_gm']:.3f} & "
+                    f"{cell(r['oasis_soft_projection_qerr_gm'])} & "
+                    f"{cell(r['hybrid_qerr_gm'])} & {cell(r['aggressive_hybrid_qerr_gm'])} & "
+                    f"{r['fresh_qerr_gm']:.3f} & "
                     f"{r['oasis_improvement_pct']:+.1f}\\% & "
                     f"{r['oasis_projected_improvement_pct']:+.1f}\\% & "
-                    f"{r['hybrid_improvement_pct']:+.1f}\\% \\\\\n")
+                    f"{r['oasis_soft_projection_improvement_pct']:+.1f}\\% & "
+                    f"{r['aggressive_hybrid_improvement_pct']:+.1f}\\% \\\\\n")
         f.write("    \\bottomrule\n  \\end{tabular}%\n  }\n\\end{table*}\n")
     print(f"LaTeX table saved to {path}")
 
@@ -531,6 +618,30 @@ def main():
     p.add_argument("--ipf-grid", type=int, default=24)
     p.add_argument("--ipf-iters", type=int, default=40)
     p.add_argument("--hybrid-min-improvement", type=float, default=0.002)
+    p.add_argument("--soft-projection-strength", type=float, default=30.0)
+    p.add_argument("--soft-projection-recency-decay", type=float, default=0.80)
+    p.add_argument("--soft-projection-target-blend", type=float, default=1.0)
+    p.add_argument("--soft-projection-window", type=int, default=0,
+                   help="Use only the most recent N observations for soft projection; 0 uses the full window.")
+    p.add_argument("--soft-projection-iters", type=int, default=500)
+    p.add_argument("--soft-projection-lr", type=float, default=0.05)
+    p.add_argument("--soft-projection-tol", type=float, default=1e-9)
+    p.add_argument("--soft-projection-active-set", action="store_true",
+                   help="Apply soft projection only to the latest hard-feasible feedback suffix.")
+    p.add_argument("--soft-projection-conflict-aware", action="store_true",
+                   help="Down-weight feedback constraints contradicted by the most recent observations.")
+    p.add_argument("--soft-projection-conflict-ref-window", type=int, default=8,
+                   help="Number of most-recent observations treated as the trusted conflict reference.")
+    p.add_argument("--soft-projection-conflict-tau", type=float, default=0.05,
+                   help="Conflict bandwidth; smaller tau suppresses contradicted observations more aggressively.")
+    p.add_argument("--soft-projection-conflict-floor", type=float, default=0.0,
+                   help="Minimum residual weight for a contradicted observation (0 fully removes it).")
+    p.add_argument("--aggressive-damping-grid", type=float, nargs="+",
+                   default=[0.35, 0.50, 0.65, 0.80, 0.95])
+    p.add_argument("--aggressive-recent-windows", type=int, nargs="+",
+                   default=[4, 8, 12])
+    p.add_argument("--projection-iters", type=int, default=200)
+    p.add_argument("--projection-tol", type=float, default=1e-4)
     p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
     run_experiment(args)

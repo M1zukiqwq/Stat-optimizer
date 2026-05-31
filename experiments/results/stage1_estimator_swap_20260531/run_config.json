@@ -1,0 +1,29 @@
+{
+  "q_values": [
+    1,
+    3,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30
+  ],
+  "max_cases_per_q": 128,
+  "predicates_per_case": 32,
+  "valid_cases": 1024,
+  "num_buckets": 10,
+  "max_observations": 16,
+  "projection_iters": 200,
+  "projection_tol": 0.0001,
+  "soft_strength": 30.0,
+  "soft_iters": 500,
+  "soft_lr": 0.05,
+  "soft_tol": 1e-09,
+  "conflict_ref_window": 8,
+  "conflict_tau": 0.03,
+  "seed": 20260531,
+  "data_root": "/Volumes/QUQ/Stat-optimizer/experiments/results/synthetic_paper_suite_rerun_20260529/compound_data",
+  "model_path": "/Volumes/QUQ/Stat-optimizer/experiments/results/synthetic_paper_suite_rerun_20260529/models/oasis_k16.json",
+  "fallback_counts": {}
+}

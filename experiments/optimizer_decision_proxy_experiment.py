@@ -40,11 +40,23 @@ if str(_PIPELINE_DIR) not in sys.path:
 from histogram_math import clamp01, evaluate_piecewise_cdf, inverse_piecewise_cdf, project_monotonic
 from json_histogram_parser import load_feedback_sample
 from mlp_histogram_model_v2 import MlpHistogramModelV2
-from modern_baselines import correct_isomer
+from modern_baselines import correct_isomer, correct_soft_isomer
 from tensorizer import tensorize_sample
+from copula_oasis_experiment import GaussianCopula
+from factorjoin_oasis_experiment import choose_aggressive_marginal
 
 
-METHOD_ORDER = ["stale", "isomer", "oasis", "oasis_projected", "hybrid", "fresh"]
+METHOD_ORDER = [
+    "stale",
+    "isomer",
+    "oasis",
+    "oasis_projected",
+    "oasis_soft_projection",
+    "hybrid",
+    "aggressive_hybrid",
+    "calibrated_hybrid",
+    "fresh",
+]
 
 
 @dataclass
@@ -167,7 +179,13 @@ def oasis_boundaries(sample, model: MlpHistogramModelV2, max_observations: int) 
     return boundaries_from_quantiles(prediction)
 
 
-def isomer_boundaries(prior_boundaries: Sequence[float], observations: Sequence[dict], num_buckets: int) -> List[float]:
+def isomer_boundaries(
+    prior_boundaries: Sequence[float],
+    observations: Sequence[dict],
+    num_buckets: int,
+    max_iter: int = 200,
+    tol: float = 1e-4,
+) -> List[float]:
     try:
         corrected = correct_isomer(
             float(prior_boundaries[0]),
@@ -175,14 +193,68 @@ def isomer_boundaries(prior_boundaries: Sequence[float], observations: Sequence[
             list(prior_boundaries[1:-1]),
             list(observations),
             num_buckets=num_buckets,
+            max_iter=max_iter,
+            tol=tol,
         )
         return boundaries_from_quantiles(corrected)
     except Exception:
         return list(prior_boundaries)
 
 
-def choose_hybrid(method_boundaries: Dict[str, List[float]], observations: Sequence[dict]) -> Tuple[str, List[float]]:
-    candidates = ["stale", "isomer", "oasis", "oasis_projected"]
+def soft_isomer_boundaries(
+    prior_boundaries: Sequence[float],
+    observations: Sequence[dict],
+    num_buckets: int,
+    strength: float = 30.0,
+    recency_decay: float = 0.80,
+    target_blend: float = 1.0,
+    observation_window: int = 0,
+    max_iter: int = 500,
+    learning_rate: float = 0.05,
+    tol: float = 1e-9,
+    active_set: bool = False,
+    conflict_aware: bool = False,
+    conflict_ref_window: int = 8,
+    conflict_tau: float = 0.05,
+    conflict_floor: float = 0.0,
+) -> List[float]:
+    try:
+        soft_observations = (
+            list(observations[-observation_window:])
+            if 0 < observation_window < len(observations)
+            else list(observations)
+        )
+        corrected = correct_soft_isomer(
+            float(prior_boundaries[0]),
+            float(prior_boundaries[-1]),
+            list(prior_boundaries[1:-1]),
+            soft_observations,
+            num_buckets=num_buckets,
+            constraint_strength=strength,
+            recency_decay=recency_decay,
+            target_blend=target_blend,
+            max_iter=max_iter,
+            learning_rate=learning_rate,
+            tol=tol,
+            active_set=active_set,
+            conflict_aware=conflict_aware,
+            conflict_ref_window=conflict_ref_window,
+            conflict_tau=conflict_tau,
+            conflict_floor=conflict_floor,
+        )
+        return boundaries_from_quantiles(corrected)
+    except Exception:
+        return list(prior_boundaries)
+
+
+def choose_hybrid(
+    method_boundaries: Dict[str, List[float]],
+    observations: Sequence[dict],
+    candidates: Optional[Sequence[str]] = None,
+) -> Tuple[str, List[float]]:
+    if candidates is None:
+        candidates = ["stale", "isomer", "oasis", "oasis_projected"]
+    candidates = [m for m in candidates if m in method_boundaries]
     scores = {method: feedback_residual(method_boundaries[method], observations) for method in candidates}
     best_method = min(candidates, key=lambda method: scores[method])
     return best_method, method_boundaries[best_method]
@@ -289,23 +361,83 @@ def regret_for_join(estimated_sel: float, true_sel: float, table_rows: int, cfg:
     return selected, optimal, selected_true_cost / max(optimal_true_cost, 1e-12)
 
 
-def build_method_boundaries(sample, model: MlpHistogramModelV2, num_buckets: int, max_observations: int) -> Tuple[Dict[str, List[float]], str]:
+def build_method_boundaries(
+    sample,
+    model: MlpHistogramModelV2,
+    num_buckets: int,
+    max_observations: int,
+    aggressive_damping_grid: Sequence[float] = (0.35, 0.50, 0.65, 0.80, 0.95),
+    aggressive_recent_windows: Sequence[int] = (4, 8, 12),
+    soft_projection_strength: float = 30.0,
+    soft_projection_recency_decay: float = 0.80,
+    soft_projection_target_blend: float = 1.0,
+    soft_projection_window: int = 0,
+    soft_projection_iters: int = 500,
+    soft_projection_lr: float = 0.05,
+    soft_projection_tol: float = 1e-9,
+    soft_projection_active_set: bool = False,
+    soft_projection_conflict_aware: bool = False,
+    soft_projection_conflict_ref_window: int = 8,
+    soft_projection_conflict_tau: float = 0.05,
+    soft_projection_conflict_floor: float = 0.0,
+    projection_iters: int = 200,
+    projection_tol: float = 1e-4,
+) -> Tuple[Dict[str, List[float]], str]:
     observations = observations_to_dicts(sample)
     stale = boundaries_from_quantiles(sample.prior.quantile_values)
     fresh = boundaries_from_quantiles(sample.corrected_quantile_values or sample.prior.quantile_values)
-    isomer = isomer_boundaries(stale, observations, num_buckets)
+    isomer = isomer_boundaries(stale, observations, num_buckets, projection_iters, projection_tol)
     oasis = oasis_boundaries(sample, model, max_observations)
-    oasis_projected = isomer_boundaries(oasis, observations, num_buckets)
+    oasis_projected = isomer_boundaries(oasis, observations, num_buckets, projection_iters, projection_tol)
+    oasis_soft_projection = soft_isomer_boundaries(
+        oasis,
+        observations,
+        num_buckets,
+        strength=soft_projection_strength,
+        recency_decay=soft_projection_recency_decay,
+        target_blend=soft_projection_target_blend,
+        observation_window=soft_projection_window,
+        max_iter=soft_projection_iters,
+        learning_rate=soft_projection_lr,
+        tol=soft_projection_tol,
+        active_set=soft_projection_active_set,
+        conflict_aware=soft_projection_conflict_aware,
+        conflict_ref_window=soft_projection_conflict_ref_window,
+        conflict_tau=soft_projection_conflict_tau,
+        conflict_floor=soft_projection_conflict_floor,
+    )
 
     method_boundaries = {
         "stale": stale,
         "isomer": isomer,
         "oasis": oasis,
         "oasis_projected": oasis_projected,
+        "oasis_soft_projection": oasis_soft_projection,
         "fresh": fresh,
     }
     hybrid_choice, hybrid = choose_hybrid(method_boundaries, observations)
     method_boundaries["hybrid"] = hybrid
+    copula = GaussianCopula(num_buckets=num_buckets)
+    aggressive, _, _ = choose_aggressive_marginal(
+        copula=copula,
+        stale=stale,
+        isomer=isomer,
+        oasis=oasis,
+        projected=oasis_projected,
+        hybrid=hybrid,
+        observations=observations,
+        num_buckets=num_buckets,
+        damping_grid=aggressive_damping_grid,
+        recent_windows=aggressive_recent_windows,
+        projection_iters=projection_iters,
+        projection_tol=projection_tol,
+    )
+    method_boundaries["aggressive_hybrid"] = aggressive
+    _, calibrated = choose_hybrid(
+        method_boundaries, observations,
+        candidates=["stale", "isomer", "oasis", "oasis_projected", "oasis_soft_projection"],
+    )
+    method_boundaries["calibrated_hybrid"] = calibrated
     return method_boundaries, hybrid_choice
 
 
@@ -428,7 +560,10 @@ def write_latex_table(output_dir: Path, summary: Sequence[dict]) -> None:
                 "isomer": "ISOMER",
                 "oasis": "OASIS",
                 "oasis_projected": "OASIS-Proj",
+                "oasis_soft_projection": "OASIS-Soft",
                 "hybrid": "Hybrid",
+                "aggressive_hybrid": "Aggressive",
+                "calibrated_hybrid": "Calibrated",
                 "fresh": "Fresh",
             }[method]
             f.write(
@@ -508,6 +643,22 @@ def run_experiment(args: argparse.Namespace) -> None:
             model=model,
             num_buckets=args.num_buckets,
             max_observations=args.max_observations,
+            aggressive_damping_grid=args.aggressive_damping_grid,
+            aggressive_recent_windows=args.aggressive_recent_windows,
+            soft_projection_strength=args.soft_projection_strength,
+            soft_projection_recency_decay=args.soft_projection_recency_decay,
+            soft_projection_target_blend=args.soft_projection_target_blend,
+            soft_projection_window=args.soft_projection_window,
+            soft_projection_iters=args.soft_projection_iters,
+            soft_projection_lr=args.soft_projection_lr,
+            soft_projection_tol=args.soft_projection_tol,
+            soft_projection_active_set=args.soft_projection_active_set,
+            soft_projection_conflict_aware=args.soft_projection_conflict_aware,
+            soft_projection_conflict_ref_window=args.soft_projection_conflict_ref_window,
+            soft_projection_conflict_tau=args.soft_projection_conflict_tau,
+            soft_projection_conflict_floor=args.soft_projection_conflict_floor,
+            projection_iters=args.projection_iters,
+            projection_tol=args.projection_tol,
         )
         hybrid_choices[hybrid_choice] += 1
 
@@ -568,6 +719,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--predicates-per-case", type=int, default=32)
     parser.add_argument("--num-buckets", type=int, default=10)
     parser.add_argument("--max-observations", type=int, default=16)
+    parser.add_argument("--aggressive-damping-grid", type=float, nargs="+",
+                        default=[0.35, 0.50, 0.65, 0.80, 0.95])
+    parser.add_argument("--aggressive-recent-windows", type=int, nargs="+",
+                        default=[4, 8, 12])
+    parser.add_argument("--soft-projection-strength", type=float, default=30.0)
+    parser.add_argument("--soft-projection-recency-decay", type=float, default=0.80)
+    parser.add_argument("--soft-projection-target-blend", type=float, default=1.0)
+    parser.add_argument("--soft-projection-window", type=int, default=0,
+                        help="Use only the most recent N observations for soft projection; 0 uses the full window.")
+    parser.add_argument("--soft-projection-iters", type=int, default=500)
+    parser.add_argument("--soft-projection-lr", type=float, default=0.05)
+    parser.add_argument("--soft-projection-tol", type=float, default=1e-9)
+    parser.add_argument("--soft-projection-active-set", action="store_true",
+                        help="Apply soft projection only to the latest hard-feasible feedback suffix.")
+    parser.add_argument("--soft-projection-conflict-aware", action="store_true",
+                        help="Down-weight feedback constraints contradicted by the most recent observations.")
+    parser.add_argument("--soft-projection-conflict-ref-window", type=int, default=8,
+                        help="Number of most-recent observations treated as the trusted conflict reference.")
+    parser.add_argument("--soft-projection-conflict-tau", type=float, default=0.05,
+                        help="Conflict bandwidth; smaller tau suppresses contradicted observations more aggressively.")
+    parser.add_argument("--soft-projection-conflict-floor", type=float, default=0.0,
+                        help="Minimum residual weight for a contradicted observation (0 fully removes it).")
+    parser.add_argument("--projection-iters", type=int, default=200)
+    parser.add_argument("--projection-tol", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--min-true-selectivity", type=float, default=1e-4)
     parser.add_argument("--risk-threshold", type=float, default=1.05)

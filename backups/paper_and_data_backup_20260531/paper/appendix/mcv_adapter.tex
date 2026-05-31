@@ -1,0 +1,300 @@
+\section{PostgreSQL-Style Statistics-Format Adapter}
+\label{sec:mcv-adapter-app}
+
+\subsection{Motivation}
+
+OASIS corrects a canonical full-distribution view of a column. This is
+straightforward when a DBMS exposes a self-contained histogram, but many
+production systems do not. Instead, the optimizer's statistics object often
+couples the histogram with auxiliary summaries whose probability mass must
+remain consistent after any update.
+
+\begin{itemize}
+    \item \textbf{PostgreSQL}: Maintains a Most Common Values (MCV) list alongside a residual histogram that excludes MCV entries.
+    \item \textbf{Oracle}: Uses top-frequency values together with height-balanced histograms.
+    \item \textbf{SQL Server}: Employs a density vector together with histogram steps.
+\end{itemize}
+
+This coupling is the main adapter boundary for histogram-correction methods:
+\emph{correcting the histogram alone} is often insufficient because the stored
+statistics object is not a standalone histogram. OASIS addresses this with a
+\emph{statistics-format conversion interface} that translates a native
+statistics layout into a canonical full distribution, applies OASIS there, and
+translates the corrected result back.
+
+We instantiate the interface on PostgreSQL's MCV case because it is both
+practically important and representative of tightly coupled statistics
+architectures. The design isolates engine-specific adapter logic, but this
+paper validates only the PostgreSQL-style MCV+histogram instantiation.
+
+\subsection{Three-Phase Conversion Interface}
+
+The interface follows three phases:
+
+\begin{enumerate}
+    \item \textbf{Reconstruction}: Convert engine-native statistics $\rightarrow$ canonical full distribution
+    \item \textbf{Correction}: Apply OASIS on the canonical representation
+    \item \textbf{Decomposition}: Convert corrected full distribution $\rightarrow$ engine-native statistics
+\end{enumerate}
+
+This design decouples OASIS's correction logic from PostgreSQL-specific storage
+fields. Other engines would require separate adapter implementations and
+validation.
+
+\subsection{PostgreSQL Instantiation}
+
+\subsection{Problem Formulation}
+
+Given PostgreSQL statistics:
+\begin{itemize}
+    \item MCV list: $\mathcal{M} = \{(v_1, f_1), (v_2, f_2), \ldots, (v_k, f_k)\}$
+    \item Residual histogram bounds: $\mathcal{H} = \{u_0, u_1, \ldots, u_m\}$ where adjacent values define $m$ equi-depth residual intervals
+    \item Null fraction: $f_{\mathrm{null}}$
+    \item Non-null invariant: $\sum_{i=1}^{k} f_i + p_{\mathrm{res}} = 1 - f_{\mathrm{null}}$
+\end{itemize}
+
+Construct a canonical full distribution $\mathcal{F}$ that exposes the complete
+non-null column distribution to OASIS.
+
+\subsection{Phase 1: Reconstruction}
+
+\begin{algorithm}[H]
+\caption{Reconstruct Canonical Full Distribution from PostgreSQL Statistics}
+\label{alg:reconstruct}
+\begin{algorithmic}[1]
+\REQUIRE MCV list $\mathcal{M}$, residual bounds $\mathcal{H} = \{u_0, \ldots, u_m\}$, null fraction $f_{\mathrm{null}}$
+\ENSURE Canonical full distribution $\mathcal{F} = (\mathcal{S}, \mathcal{R})$
+
+\STATE Initialize $\mathcal{S} \leftarrow \emptyset$, $\mathcal{R} \leftarrow \emptyset$
+\STATE $p_{\mathrm{res}} \leftarrow 1 - f_{\mathrm{null}} - \sum_{(v_i,f_i) \in \mathcal{M}} f_i$
+
+\FOR{each $(v_i, f_i) \in \mathcal{M}$}
+    \STATE Add singleton bucket $(v_i, f_i)$ to $\mathcal{S}$
+\ENDFOR
+
+\FOR{$j = 1$ \textbf{to} $m$}
+    \STATE Add range bucket $(u_{j-1}, u_j, p_{\mathrm{res}} / m)$ to $\mathcal{R}$
+\ENDFOR
+
+\STATE Validate: $\sum_{s \in \mathcal{S}} s.\mathrm{freq} + \sum_{r \in \mathcal{R}} r.\mathrm{freq} = 1 - f_{\mathrm{null}}$
+\RETURN $\mathcal{F} = (\mathcal{S}, \mathcal{R})$
+\end{algorithmic}
+\end{algorithm}
+
+PostgreSQL stores histogram \emph{boundary values}, not explicit per-bucket
+frequencies. The conversion interface therefore interprets the residual
+histogram as $m$ equal-depth intervals carrying equal shares of the residual
+non-MCV mass. Before tensorization, the interface evaluates the CDF of
+$\mathcal{F}$ at OASIS's fixed quantile levels, yielding the canonical quantile
+vector consumed by the model.
+
+\subsection{Phase 2: OASIS Correction}
+
+Once reconstructed, the canonical full distribution is passed unchanged to the
+standard OASIS correction pipeline. The important systems property is that the
+model itself remains ignorant of the source database format; all engine-specific
+handling is localized to the conversion interface.
+
+\subsection{Phase 3: Decomposition}
+
+Given a corrected full distribution $\mathcal{F}' = (\mathcal{S}', \mathcal{R}')$,
+reconstruct PostgreSQL-compatible statistics:
+\begin{itemize}
+    \item new MCV list: $\mathcal{M}'$
+    \item new residual histogram bounds: $\mathcal{H}'$
+    \item invariant: $\sum_i f_i' + p'_{\mathrm{res}} = 1 - f_{\mathrm{null}}$
+\end{itemize}
+
+\begin{algorithm}[H]
+\caption{Decompose Canonical Full Distribution to PostgreSQL Statistics}
+\label{alg:decompose}
+\begin{algorithmic}[1]
+\REQUIRE Full distribution $\mathcal{F}' = (\mathcal{S}', \mathcal{R}')$, MCV threshold $\tau$, MCV limit $K$, target histogram size $m{+}1$
+\ENSURE MCV list $\mathcal{M}'$, residual histogram bounds $\mathcal{H}'$
+
+\STATE \textbf{Step 1: Extract MCV candidates}
+\STATE $\mathcal{C} \leftarrow \{(v, f) \mid (v, f) \in \mathcal{S}' \text{ and } f \geq \tau\}$
+\STATE Sort $\mathcal{C}$ by frequency (descending)
+\STATE $\mathcal{M}' \leftarrow$ top $K$ entries from $\mathcal{C}$
+
+\STATE \textbf{Step 2: Build residual distribution}
+\STATE $V_{\text{mcv}} \leftarrow \{v \mid (v, f) \in \mathcal{M}'\}$
+\STATE Construct residual mixture from all range buckets in $\mathcal{R}'$ and all singletons in $\mathcal{S}'$ whose value is not in $V_{\text{mcv}}$
+
+\STATE \textbf{Step 3: Resample equi-depth histogram bounds}
+\FOR{$j = 0$ \textbf{to} $m$}
+    \STATE Set $u_j$ to the residual quantile at level $j/m$
+\ENDFOR
+\STATE $\mathcal{H}' \leftarrow \{u_0, \ldots, u_m\}$
+
+\STATE Validate: $\sum_{(v,f) \in \mathcal{M}'} f + p'_{\mathrm{res}} = 1 - f_{\mathrm{null}}$
+\RETURN $\mathcal{M}'$, $\mathcal{H}'$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{MCV Selection Policy}
+
+The MCV threshold $\tau$ and limit $K$ control the final decomposition:
+\begin{itemize}
+    \item \textbf{High threshold}: keeps the MCV list compact but pushes more probability mass into the residual histogram
+    \item \textbf{Low threshold}: retains more explicit singleton masses as MCV entries
+    \item \textbf{PostgreSQL default-like regime}: $\tau \approx 0.01$, $K = 100$
+\end{itemize}
+
+This threshold is a decomposition policy choice, not part of OASIS's core
+correction model. In our validation, experiments 1--3 remove threshold effects
+by using threshold-free round trips, while experiment 4 isolates the effect of
+$\tau_{\text{MCV}}$ after a simulated correction.
+
+\subsection{Adapter Boundary Beyond PostgreSQL}
+
+The PostgreSQL instantiation is only one instance of the conversion pattern.
+The same interface idea can be implemented for other engines that rely on
+histograms to very different degrees, but those implementations are outside the
+experimental scope of this paper:
+
+\begin{itemize}
+    \item \textbf{Self-contained histograms} (MySQL, MariaDB): direct pass-through; conversion degenerates to a near-identity mapping.
+    \item \textbf{MCV-coupled statistics} (PostgreSQL, Oracle): reconstruct from explicit frequent-value summaries plus residual histograms, then decompose back.
+    \item \textbf{Hybrid summaries} (SQL Server): reconstruct from histogram steps plus density summaries, apply OASIS, then recompute auxiliary summaries.
+\end{itemize}
+
+The systems contribution here is to expose and validate this adapter boundary
+for a PostgreSQL-style statistics object, not to claim that all DBMS formats are
+already supported.
+
+\subsection{Consistency Guarantees}
+
+\subsection{Probability Mass Conservation}
+
+\begin{theorem}[Probability Conservation]
+If the source statistics satisfy the non-null invariant
+$\sum_i f_i + p_{\mathrm{res}} = 1 - f_{\mathrm{null}}$, then:
+\begin{enumerate}
+    \item reconstruction produces a canonical full distribution with the same non-null mass;
+    \item decomposition emits engine-native statistics whose MCV mass plus residual mass again equals $1 - f_{\mathrm{null}}$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+Reconstruction assigns all explicit MCV mass to singleton buckets and all
+remaining non-null mass to residual intervals by construction. Decomposition
+selects an explicit MCV set and resamples the remainder as residual histogram
+bounds, so the output MCV mass and residual mass partition the same corrected
+non-null mass. Therefore the invariant is preserved.
+\end{proof}
+
+\subsection{Approximate Idempotence}
+
+\begin{definition}[Approximate Idempotence]
+Let $(\mathcal{M}', \mathcal{H}') = \mathrm{Decompose}(\mathrm{Reconstruct}(\mathcal{M}, \mathcal{H}), \tau, K)$. The conversion interface is $\epsilon$-idempotent if the round trip preserves total non-null mass within $\epsilon$ and preserves the residual quantile function within $\epsilon$ over a fixed evaluation grid.
+\end{definition}
+
+Perfect idempotence need not hold under thresholded decomposition because:
+\begin{itemize}
+    \item the MCV threshold may change which values remain explicit,
+    \item low-frequency singleton mass may be folded back into the residual distribution,
+    \item floating-point rounding accumulates.
+\end{itemize}
+
+Our threshold-free validation shows exact total-mass preservation and
+machine-precision residual-quantile fidelity for the tested PostgreSQL-style
+statistics.
+
+\subsection{Implementation Interface}
+
+We provide a Python reference interface that exposes the conversion pattern
+explicitly:
+
+\begin{lstlisting}[language=Python, caption=Statistics-Format Conversion Interface (PostgreSQL Instance)]
+class PostgreSQLStatisticsAdapter:
+    def to_full_histogram(
+        self,
+        pg_stats: PostgreSQLStatistics
+    ) -> FullHistogram:
+        """Phase 1: Reconstruction"""
+        pass
+
+    def from_full_histogram(
+        self,
+        full_hist: FullHistogram
+    ) -> PostgreSQLStatistics:
+        """Phase 3: Decomposition"""
+        pass
+
+    def round_trip_test(
+        self,
+        pg_stats: PostgreSQLStatistics
+    ) -> Tuple[bool, str]:
+        """Validate round-trip fidelity"""
+        pass
+\end{lstlisting}
+
+The full reference interface is available in
+\texttt{appendix/mcv\_adapter\_interface.py}. This appendix is the
+supplementary counterpart of the compact PostgreSQL-style adapter discussion in
+the main text and is intended to be kept numerically consistent with
+\texttt{experiments/results/mcv\_validation\_results.json}.
+
+\subsection{Performance Considerations}
+
+\subsection{Time Complexity}
+
+\begin{itemize}
+    \item \textbf{Reconstruction}: $O(k + n)$ where $k = |\mathcal{M}|$ and $n = |\mathcal{H}|$
+    \item \textbf{Decomposition}: dominated by MCV candidate sorting and residual quantile sampling
+    \item \textbf{Total overhead}: negligible relative to correction and well within planning-time constraints in our PostgreSQL validation
+\end{itemize}
+
+\subsection{Space Complexity}
+
+The canonical full distribution is temporary and small:
+\[
+\mathrm{Space}(\mathcal{F}) = \mathrm{Space}(\mathcal{M}) + \mathrm{Space}(\mathcal{H}) + O(1).
+\]
+
+In practice this overhead is acceptable because statistics objects are compact,
+the canonical distribution exists only during correction, and no persistent
+storage expansion is required.
+
+\subsection{Validation Summary}
+\label{sec:mcv-eval}
+
+We validate the PostgreSQL instantiation of the conversion interface on
+synthetic PostgreSQL-style statistics spanning uniform, normal, Zipfian, and
+bimodal distributions.
+
+\begin{table}[h]
+\centering
+\caption{PostgreSQL Statistics-Format Interface Validation Summary}
+\label{tab:mcv-validation-summary}
+\begin{tabular}{l l}
+\toprule
+\textbf{Metric} & \textbf{Result} \\
+\midrule
+Round-trip total mass error & $0$ \\
+Residual quantile MAE (mean) & $2.4 \times 10^{-17}$ \\
+Residual quantile MAE (max) & $9.2 \times 10^{-17}$ \\
+Selectivity MAE & $1.1 \times 10^{-4}$ \\
+Selectivity P99 & $3.8 \times 10^{-3}$ \\
+Default-like overhead (100 MCV, 10--20 bins) & $0.066$--$0.073$ ms \\
+Worst tested overhead (50 MCV, 50 bins) & $1.03$ ms \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These results support three claims. First, the conversion interface is exact in
+mass preservation and essentially exact in residual-quantile reconstruction
+under threshold-free round trips. Second, it introduces negligible estimation
+bias and low latency on PostgreSQL-like settings. Third, threshold sensitivity
+is graceful: increasing $\tau_{\text{MCV}}$ shrinks the MCV list and gradually
+increases selectivity error, but does not compromise mass conservation.
+
+\subsection{Takeaway}
+
+The main value of this adapter is that it keeps histogram correction separate
+from native statistics storage details. OASIS corrects the canonical
+full-distribution view; the PostgreSQL-style adapter reconstructs and
+decomposes the native MCV+histogram object around that view. Extending the same
+pattern to other DBMSs is a design direction rather than an evaluated claim in
+this paper.

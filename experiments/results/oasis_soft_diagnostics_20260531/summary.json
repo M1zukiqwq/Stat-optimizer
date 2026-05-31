@@ -1,0 +1,46 @@
+{
+  "n_cases": 384,
+  "future_qerror_gm": {
+    "hard": 1.4494099172673094,
+    "soft_full": 1.392973397440175,
+    "soft_recent": 1.4010251210286209,
+    "soft_conflict": 1.3948428394794052
+  },
+  "kl_to_prior_mean": {
+    "hard": 0.23556822707294622,
+    "soft_full": 0.2911900398588905,
+    "soft_recent": 0.21750639724915996,
+    "soft_conflict": 0.2277375203834375
+  },
+  "l1_to_hard_mean": {
+    "hard": 0.0,
+    "soft_full": 0.03591165123539177,
+    "soft_recent": 0.023653886028198515,
+    "soft_conflict": 0.02275216380273025
+  },
+  "feedresid_mean": {
+    "hard": 0.04484234525100291,
+    "soft_full": 0.033012011481515814,
+    "soft_recent": 0.04040776964767021,
+    "soft_conflict": 0.039335102630343656
+  },
+  "hard_active_suffix_len_mean": 5.606770833333333,
+  "n_obs_mean": 14.080729166666666,
+  "n_old_mean": 6.080729166666667,
+  "n_old_consistent_mean": 3.46875,
+  "n_old_conflicted_mean": 2.6119791666666665,
+  "mean_conflict_old_mean": 0.062136142081312774,
+  "conflict_beats_recent_frac": 0.5286458333333334,
+  "conflict_vs_recent_mean_dqerr": 0.008385365286121537,
+  "cases_with_consistent_old_frac": 0.9010416666666666,
+  "conflict_vs_recent_dqerr_when_consistent_old": 0.009317395521938941,
+  "conflict_vs_recent_dqerr_when_no_consistent_old": -0.00010101528211060642,
+  "config": {
+    "recent_window": 8,
+    "conflict_tau": 0.03,
+    "conflict_floor": 0.0,
+    "conflict_thr": 0.05,
+    "soft_strength": 30.0,
+    "soft_iters": 500
+  }
+}

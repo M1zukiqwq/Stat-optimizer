@@ -1,0 +1,21 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Benchmark-inspired DML trace sanity check. Each trace emits explicit insert/update/delete events anchored to an analytical benchmark table/column pattern. Values are geometric mean selectivity Q-error; no production trace or query runtime is used.}
+  \label{tab:trace_grounded_drift}
+  \setlength{\tabcolsep}{3.5pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lrrrrrrrrrr}
+    \toprule
+    Trace & DML mix I/U/D & Growth & Stale & ISOMER & OASIS & OASIS-Proj & Soft & Hybrid & Aggressive & Fresh \\
+    \midrule
+    Sales append & 96/0/4 & +79.9\% & 1.529 & 1.128 & 1.132 & \textbf{1.121} & 1.135 & 1.135 & 1.138 & 1.000 \\
+    Promotion price & 30/70/0 & +33.9\% & 1.025 & \textbf{1.018} & 1.086 & 1.026 & 1.031 & 1.019 & 1.019 & 1.000 \\
+    Inventory restock & 19/75/6 & +19.8\% & 1.222 & \textbf{1.042} & 1.171 & 1.064 & 1.068 & 1.042 & 1.045 & 1.000 \\
+    Returns/cancel & 38/17/45 & -3.6\% & 2.047 & 1.163 & 1.219 & \textbf{1.142} & 1.158 & 1.162 & 1.176 & 1.000 \\
+    Customer churn & 36/62/2 & +41.2\% & 1.172 & \textbf{1.057} & 1.138 & 1.076 & 1.085 & 1.061 & 1.062 & 1.000 \\
+    Seasonal mixed & 58/38/4 & +50.8\% & 1.029 & \textbf{1.020} & 1.107 & 1.031 & 1.032 & 1.021 & 1.022 & 1.000 \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

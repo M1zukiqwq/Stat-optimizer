@@ -12,7 +12,7 @@ signals when injected as single-column statistics:
 
 The script creates a local synthetic table whose current data follows the
 "fresh" distribution, then injects alternative pg_statistic rows for fact.x:
-stale, ISOMER, OASIS, OASIS-Proj, Hybrid, and fresh. PostgreSQL therefore uses
+stale, ISOMER, OASIS, OASIS-Proj, OASIS-Soft, Hybrid, Aggressive, and fresh. PostgreSQL therefore uses
 its real planner and cost model, while the experiment remains narrowly about
 planner evidence rather than execution latency.
 """
@@ -62,7 +62,10 @@ SOURCE_TABLE_BY_METHOD = {
     "isomer": "stat_source_isomer",
     "oasis": "stat_source_oasis",
     "oasis_projected": "stat_source_oasis_projected",
+    "oasis_soft_projection": "stat_source_oasis_soft_projection",
     "hybrid": "stat_source_hybrid",
+    "aggressive_hybrid": "stat_source_aggressive_hybrid",
+    "calibrated_hybrid": "stat_source_calibrated_hybrid",
     "fresh": "stat_source_fresh",
 }
 
@@ -422,7 +425,7 @@ def load_all_stat_sources(
 ) -> None:
     load_stat_source(args, "stale", [float(value) for value in initial])
     load_stat_source(args, "fresh", [float(value) for value in fresh])
-    for method in ["isomer", "oasis", "oasis_projected", "hybrid"]:
+    for method in ["isomer", "oasis", "oasis_projected", "oasis_soft_projection", "hybrid", "aggressive_hybrid", "calibrated_hybrid"]:
         values = sample_values_from_boundaries(
             method_boundaries[method],
             count=args.stat_source_rows or len(fresh),
@@ -772,7 +775,10 @@ def method_label(method: str) -> str:
         "isomer": "ISOMER",
         "oasis": "OASIS-noProj",
         "oasis_projected": "OASIS",
+        "oasis_soft_projection": "OASIS-Soft",
         "hybrid": "Hybrid",
+        "aggressive_hybrid": "Aggressive",
+        "calibrated_hybrid": "Calibrated",
         "fresh": "Fresh",
     }[method]
 
@@ -864,6 +870,22 @@ def run_experiment(args: argparse.Namespace) -> Tuple[List[PlanRow], List[dict],
         model=model,
         num_buckets=args.num_buckets,
         max_observations=args.max_observations,
+        aggressive_damping_grid=args.aggressive_damping_grid,
+        aggressive_recent_windows=args.aggressive_recent_windows,
+        soft_projection_strength=args.soft_projection_strength,
+        soft_projection_recency_decay=args.soft_projection_recency_decay,
+        soft_projection_target_blend=args.soft_projection_target_blend,
+        soft_projection_window=args.soft_projection_window,
+        soft_projection_iters=args.soft_projection_iters,
+        soft_projection_lr=args.soft_projection_lr,
+        soft_projection_tol=args.soft_projection_tol,
+        soft_projection_active_set=args.soft_projection_active_set,
+        soft_projection_conflict_aware=args.soft_projection_conflict_aware,
+        soft_projection_conflict_ref_window=args.soft_projection_conflict_ref_window,
+        soft_projection_conflict_tau=args.soft_projection_conflict_tau,
+        soft_projection_conflict_floor=args.soft_projection_conflict_floor,
+        projection_iters=args.projection_iters,
+        projection_tol=args.projection_tol,
     )
 
     load_base_tables(args, fresh, dim_ids)
@@ -1129,6 +1151,30 @@ def parse_args() -> argparse.Namespace:
                         help="Rows for learned-stat source tables; 0 reuses --rows.")
     parser.add_argument("--num-buckets", type=int, default=10)
     parser.add_argument("--max-observations", type=int, default=16)
+    parser.add_argument("--aggressive-damping-grid", type=float, nargs="+",
+                        default=[0.35, 0.50, 0.65, 0.80, 0.95])
+    parser.add_argument("--aggressive-recent-windows", type=int, nargs="+",
+                        default=[4, 8, 12])
+    parser.add_argument("--soft-projection-strength", type=float, default=30.0)
+    parser.add_argument("--soft-projection-recency-decay", type=float, default=0.80)
+    parser.add_argument("--soft-projection-target-blend", type=float, default=1.0)
+    parser.add_argument("--soft-projection-window", type=int, default=0,
+                        help="Use only the most recent N observations for soft projection; 0 uses the full window.")
+    parser.add_argument("--soft-projection-iters", type=int, default=500)
+    parser.add_argument("--soft-projection-lr", type=float, default=0.05)
+    parser.add_argument("--soft-projection-tol", type=float, default=1e-9)
+    parser.add_argument("--soft-projection-active-set", action="store_true",
+                        help="Apply soft projection only to the latest hard-feasible feedback suffix.")
+    parser.add_argument("--soft-projection-conflict-aware", action="store_true",
+                        help="Down-weight feedback constraints contradicted by the most recent observations.")
+    parser.add_argument("--soft-projection-conflict-ref-window", type=int, default=8,
+                        help="Number of most-recent observations treated as the trusted conflict reference.")
+    parser.add_argument("--soft-projection-conflict-tau", type=float, default=0.05,
+                        help="Conflict bandwidth; smaller tau suppresses contradicted observations more aggressively.")
+    parser.add_argument("--soft-projection-conflict-floor", type=float, default=0.0,
+                        help="Minimum residual weight for a contradicted observation (0 fully removes it).")
+    parser.add_argument("--projection-iters", type=int, default=200)
+    parser.add_argument("--projection-tol", type=float, default=1e-4)
     parser.add_argument("--pg-statistics-target", type=int, default=100)
     parser.add_argument("--seed", type=int, default=20260529)
     parser.add_argument("--random-page-cost", type=float, default=1.5)

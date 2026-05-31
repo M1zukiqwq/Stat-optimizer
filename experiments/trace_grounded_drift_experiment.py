@@ -109,7 +109,9 @@ def method_label(method: str) -> str:
         "isomer": "ISOMER",
         "oasis": "OASIS",
         "oasis_projected": "OASIS-Proj",
+        "oasis_soft_projection": "OASIS-Soft",
         "hybrid": "Hybrid",
+        "aggressive_hybrid": "Aggressive",
         "fresh": "Fresh",
     }[method]
 
@@ -488,9 +490,9 @@ def write_trace_table(output_dir: Path, summary: Sequence[dict], characteristics
         handle.write("  \\label{tab:trace_grounded_drift}\n")
         handle.write("  \\setlength{\\tabcolsep}{3.5pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
-        handle.write("  \\begin{tabular}{lrrrrrrrr}\n")
+        handle.write("  \\begin{tabular}{lrrrrrrrrrr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    Trace & DML mix I/U/D & Growth & Stale & ISOMER & OASIS & OASIS-Proj & Hybrid & Fresh \\\\\n")
+        handle.write("    Trace & DML mix I/U/D & Growth & Stale & ISOMER & OASIS & OASIS-Proj & Soft & Hybrid & Aggressive & Fresh \\\\\n")
         handle.write("    \\midrule\n")
         for trace in TRACE_ORDER:
             char = chars[trace]
@@ -499,13 +501,17 @@ def write_trace_table(output_dir: Path, summary: Sequence[dict], characteristics
             isomer = by_key[(trace, "isomer")]
             oasis = by_key[(trace, "oasis")]
             projected = by_key[(trace, "oasis_projected")]
+            soft = by_key[(trace, "oasis_soft_projection")]
             hybrid = by_key[(trace, "hybrid")]
+            aggressive = by_key[(trace, "aggressive_hybrid")]
             fresh = by_key[(trace, "fresh")]
             method_values = {
                 "isomer": isomer["qerror_gm"],
                 "oasis": oasis["qerror_gm"],
                 "oasis_projected": projected["qerror_gm"],
+                "oasis_soft_projection": soft["qerror_gm"],
                 "hybrid": hybrid["qerror_gm"],
+                "aggressive_hybrid": aggressive["qerror_gm"],
             }
             best = min(method_values, key=method_values.get)
 
@@ -517,7 +523,9 @@ def write_trace_table(output_dir: Path, summary: Sequence[dict], characteristics
                 f"    {trace_label(trace)} & {dml} & {char['net_growth_mean'] * 100:+.1f}\\% & "
                 f"{stale['qerror_gm']:.3f} & {fmt('isomer', isomer['qerror_gm'])} & "
                 f"{fmt('oasis', oasis['qerror_gm'])} & {fmt('oasis_projected', projected['qerror_gm'])} & "
-                f"{fmt('hybrid', hybrid['qerror_gm'])} & {fresh['qerror_gm']:.3f} \\\\\n"
+                f"{fmt('oasis_soft_projection', soft['qerror_gm'])} & "
+                f"{fmt('hybrid', hybrid['qerror_gm'])} & "
+                f"{fmt('aggressive_hybrid', aggressive['qerror_gm'])} & {fresh['qerror_gm']:.3f} \\\\\n"
             )
         handle.write("    \\bottomrule\n")
         handle.write("  \\end{tabular}%\n")
@@ -571,8 +579,8 @@ def write_summary_text(
         "=" * 48,
         "OASIS checkpoint is trained on compound drift only; no trace retraining is used.",
         "",
-        "Trace                  I/U/D    Growth  Stale  ISOMER  OASIS  Proj  Hybrid  Fresh",
-        "-" * 90,
+        "Trace                  I/U/D    Growth  Stale  ISOMER  OASIS  Proj   Soft  Hybrid  Aggressive  Fresh",
+        "-" * 112,
     ]
     for trace in TRACE_ORDER:
         char = chars[trace]
@@ -581,7 +589,8 @@ def write_summary_text(
         lines.append(
             f"{trace:<22s} {dml:<8s} {char['net_growth_mean'] * 100:+6.1f}%  "
             f"{row('stale'):5.3f}  {row('isomer'):6.3f}  {row('oasis'):5.3f}  "
-            f"{row('oasis_projected'):5.3f}  {row('hybrid'):6.3f}  {row('fresh'):5.3f}"
+            f"{row('oasis_projected'):5.3f}  {row('oasis_soft_projection'):5.3f}  {row('hybrid'):6.3f}  "
+            f"{row('aggressive_hybrid'):10.3f}  {row('fresh'):5.3f}"
         )
         total = sum(hybrid_choices[trace].values())
         if total:
@@ -610,7 +619,24 @@ def run_experiment(args: argparse.Namespace) -> None:
             case = build_case(trace, case_id, args)
             cases.append(case)
             true_boundaries = case.fresh_boundaries
-            boundaries, hybrid_choice = method_boundaries(case.sample, model, args.num_buckets, model_window)
+            boundaries, hybrid_choice = method_boundaries(
+                case.sample,
+                model,
+                args.num_buckets,
+                model_window,
+                soft_projection_strength=args.soft_projection_strength,
+                soft_projection_recency_decay=args.soft_projection_recency_decay,
+                soft_projection_target_blend=args.soft_projection_target_blend,
+                soft_projection_window=args.soft_projection_window,
+                soft_projection_iters=args.soft_projection_iters,
+                soft_projection_lr=args.soft_projection_lr,
+                soft_projection_tol=args.soft_projection_tol,
+                soft_projection_active_set=args.soft_projection_active_set,
+                soft_projection_conflict_aware=args.soft_projection_conflict_aware,
+                soft_projection_conflict_ref_window=args.soft_projection_conflict_ref_window,
+                soft_projection_conflict_tau=args.soft_projection_conflict_tau,
+                soft_projection_conflict_floor=args.soft_projection_conflict_floor,
+            )
             hybrid_choices[trace][hybrid_choice] += 1
             points = metric_points(args.seed + TRACE_ORDER.index(trace) * 100_000 + case_id, args.metric_points)
             observations = [
@@ -659,6 +685,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--observations", type=int, default=16)
     parser.add_argument("--num-buckets", type=int, default=10)
     parser.add_argument("--metric-points", type=int, default=64)
+    parser.add_argument("--soft-projection-strength", type=float, default=30.0)
+    parser.add_argument("--soft-projection-recency-decay", type=float, default=0.80)
+    parser.add_argument("--soft-projection-target-blend", type=float, default=1.0)
+    parser.add_argument("--soft-projection-window", type=int, default=0,
+                        help="Use only the most recent N observations for soft projection; 0 uses the full window.")
+    parser.add_argument("--soft-projection-iters", type=int, default=500)
+    parser.add_argument("--soft-projection-lr", type=float, default=0.05)
+    parser.add_argument("--soft-projection-tol", type=float, default=1e-9)
+    parser.add_argument("--soft-projection-active-set", action="store_true",
+                        help="Apply soft projection only to the latest hard-feasible feedback suffix.")
+    parser.add_argument("--soft-projection-conflict-aware", action="store_true",
+                        help="Down-weight feedback constraints contradicted by the most recent observations.")
+    parser.add_argument("--soft-projection-conflict-ref-window", type=int, default=8,
+                        help="Number of most-recent observations treated as the trusted conflict reference.")
+    parser.add_argument("--soft-projection-conflict-tau", type=float, default=0.05,
+                        help="Conflict bandwidth; smaller tau suppresses contradicted observations more aggressively.")
+    parser.add_argument("--soft-projection-conflict-floor", type=float, default=0.0,
+                        help="Minimum residual weight for a contradicted observation (0 fully removes it).")
     parser.add_argument("--seed", type=int, default=20260529)
     parser.add_argument("--write-rows", action="store_true")
     return parser.parse_args()

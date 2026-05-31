@@ -1,0 +1,1066 @@
+%!TEX encoding = UTF-8 Unicode
+\documentclass[preprint,12pt]{elsarticle}
+
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{graphicx}
+\usepackage{adjustbox}
+\usepackage{subcaption}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{hyperref}
+
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds,calc}
+\setlist{nosep,leftmargin=*}
+
+\newcommand{\oasisUseMaxWidthResize}[1]{%
+  \renewcommand{\resizebox}[3]{\adjustbox{max width=#1}{##3}}%
+}
+
+\newtheorem{problem}{Problem}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{teal},
+}
+
+\journal{Information Systems}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{OASIS: Feedback-Driven Marginal Statistics Correction for Cost-Based Query Optimizers}
+
+\author[inst1]{Author Names Redacted for Review}
+\affiliation[inst1]{organization={Affiliation Redacted},
+  addressline={},
+  city={},
+  country={}}
+
+\begin{abstract}
+Cost-based optimizers depend on column-level statistics that are refreshed by
+periodic \texttt{ANALYZE} passes. Between refreshes, continuous inserts,
+deletes, and updates create a staleness gap: the optimizer keeps planning with
+obsolete histograms even though query execution exposes predicate-level
+feedback. This paper presents OASIS, a two-stage statistics-layer correction
+pipeline: a learned drift-repair model first predicts corrected single-column
+marginals from stale histograms and recent query feedback, and a
+feedback-consistency projection then calibrates the repaired marginal before it
+is exposed to downstream estimators or a DBMS planner. OASIS maps engine-native
+statistics to a canonical quantile/CDF view, requires no base-table rescans, and
+leaves the optimizer's search procedure and cost model unchanged.
+
+The evaluation is optimizer-facing rather than runtime-facing, and it shows that
+both stages are necessary. The learned repair stage alone reduces single-column
+selectivity Q-error by 51.3\%, 57.9\%, and 60.6\% at drift intensities $q=10$,
+$20$, and $30$, outperforming local-feedback methods such as ISOMER in the
+moderate-to-large drift regime; such methods are constrained by observed
+feedback and do not learn a reusable global drift-repair prior. The projection
+stage is what makes the repaired marginal safe to compose: the stage-one
+marginal alone gives only limited and unstable multi-column gains and is
+\emph{actively harmful} in the bilinear FactorJoin join kernel, whereas the full
+two-stage OASIS recovers stable gains. Embedded as a drop-in marginal source
+across a six-estimator composition family (independence, IPF/Sinkhorn, and four
+copulas), OASIS improves every estimator in that family by 22\%--38\%. In the
+FactorJoin join kernel, OASIS-noProj is harmful, while the full OASIS recovers
+stable join-cardinality gains. Across 12 PostgreSQL planner-only configurations,
+OASIS reduces aggregate row-estimation Q-error from 27.748 to 2.360 and matches
+the fresh-statistics plan shape on 96.1\% of queries, while the projection
+reduces new plan deviations from 13.8\% to 1.1\%. A residual-gated Hybrid policy
+supports safe deployment under sparse or noisy feedback, cutting aggregate
+DML-trace Q-error from 1.295 to 1.072. No query runtime is measured.
+\end{abstract}
+
+\begin{graphicalabstract}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=1.1cm,
+  box/.style={draw, rounded corners, align=center, minimum height=1.0cm,
+              minimum width=2.6cm, fill=blue!4},
+  calib/.style={draw, rounded corners, align=center, minimum height=1.0cm,
+                minimum width=2.6cm, fill=green!5},
+  arrow/.style={-{Latex[length=2mm]}, thick}
+]
+  \node[box] (stale) {Stale\\histogram};
+  \node[box, right=of stale] (feedback) {Query\\feedback};
+  \node[box, right=of feedback] (oasis) {OASIS stage 1\\learned drift repair};
+  \node[calib, right=of oasis] (proj) {OASIS stage 2\\feedback projection};
+  \node[box, right=of proj] (planner) {DBMS planner\\estimated rows + plans};
+  \draw[arrow] (stale) -- (feedback);
+  \draw[arrow] (feedback) -- (oasis);
+  \draw[arrow] (oasis) -- (proj);
+  \draw[arrow] (proj) -- (planner);
+\end{tikzpicture}
+}
+\end{graphicalabstract}
+
+\begin{highlights}
+\item OASIS pairs a learned single-column drift-repair stage with a feedback-consistency projection.
+\item Both stages are necessary: learning supplies a reusable drift prior; projection makes the marginal safe to compose.
+\item OASIS supplies drop-in marginals for copula, IPF, and FactorJoin join estimators.
+\item Deployment safety is evaluated with traces, feedback noise, and PostgreSQL planner checks.
+\end{highlights}
+
+\begin{keyword}
+Statistics correction \sep Cardinality estimation \sep Histogram calibration
+\sep Cost-based optimizer \sep Query feedback \sep Online learning
+\end{keyword}
+
+\end{frontmatter}
+
+\section{Introduction}
+\label{sec:intro}
+
+Cost-based optimizers (CBOs) choose query plans from estimates of predicate
+selectivity, intermediate cardinality, and operator cost. In many analytical
+database systems, these estimates rely on column-level statistics such as
+histograms, most-common-value lists, and density summaries. The statistics are
+periodically refreshed through \texttt{ANALYZE}-style procedures that read a
+full or sampled view of the table. This maintenance strategy is simple and
+robust, but it leaves a persistent staleness gap: tables continue to receive
+inserts, deletes, and updates while the optimizer keeps planning with the last
+statistics snapshot. As the gap widens, stale histograms induce systematic
+selectivity errors that can propagate through the optimizer's cost model.
+
+Existing remedies operate at different layers of the optimization stack.
+Frequent \texttt{ANALYZE} reduces staleness but increases scan overhead.
+Learned cardinality estimators predict point cardinalities for particular
+queries and often require raw data, query workloads, or table-specific
+training. Plan-level feedback systems adjust plan choices or hints after
+observing execution behavior, but they do not repair the underlying statistics
+objects consumed by the optimizer. This paper focuses on a complementary layer:
+\emph{statistics-level correction}. Rather than replacing the optimizer or
+learning complete query cardinalities, we update the column statistics supplied
+to the existing CBO.
+
+The key observation is that a DBMS already obtains useful feedback while
+executing ordinary queries. For a filter predicate, the optimizer's estimated
+selectivity and the executor's observed selectivity expose a local discrepancy
+between the stale histogram and the current data distribution. OASIS turns a
+recent window of such observations into a corrected single-column histogram
+before the statistics reach the optimizer. The design is intentionally
+non-invasive: OASIS requires a query-completion feedback listener and a
+statistics-assembly hook, but no changes to the optimizer's search algorithm or
+cost model.
+
+The central challenge is that feedback is sparse, local, and heterogeneous.
+Naively forcing a histogram to match a few recent predicates can overfit the
+feedback window; ignoring the feedback leaves the prior stale. OASIS addresses
+this problem by learning a \emph{drift-correction function}. It encodes the
+stale quantile histogram together with recent predicate observations and uses a
+compact pooled MLP to predict corrected quantile boundaries. The same
+38K-parameter checkpoint is trained once on simulation-derived drift scenarios
+and then reused across columns and schemas in our experiments.
+
+Because OASIS operates at the marginal-statistics layer, its role in
+multi-column settings is conditional rather than automatic. It supplies
+corrected one-dimensional inputs; it does not infer dependence structure or
+repair join correlations by itself. This is why OASIS has two stages. The
+learned drift-repair stage extrapolates the post-drift marginal from the stale
+prior and recent feedback, which is what improves estimates on future, unseen
+predicates beyond the observed feedback window. Local-feedback methods are
+constrained by observed predicates and lack a learned global drift prior. But a
+globally plausible learned marginal need not be consistent with the predicates
+that were just observed, and a downstream estimator can amplify that local
+inconsistency into a much larger joint error. The second stage therefore
+projects the learned marginal onto the current feedback constraints before it is
+consumed by a downstream estimator or DBMS planner. Throughout, we write
+OASIS-noProj for the stage-one-only output
+and OASIS for the full two-stage system, which is the deployed form; a
+residual-gated Hybrid policy chooses among stale, ISOMER, OASIS-noProj, and OASIS
+when feedback is sparse or noisy. The central empirical finding is that both
+stages are necessary---neither the learned stage nor a local-feedback projection
+alone is sufficient across single-column accuracy and downstream composition.
+
+The evaluation follows this scope. We evaluate the mechanism where it acts:
+future selectivity estimates, structural histogram error, downstream marginal
+composition---including a six-estimator composition family and the FactorJoin
+join kernel that consume OASIS as a drop-in marginal source---and real
+PostgreSQL planner estimates and plan shapes. The
+PostgreSQL study is planner-only: true rows are obtained with
+\texttt{COUNT(*)}, and optimizer-facing evidence comes from
+\texttt{EXPLAIN (FORMAT JSON)} under injected statistics states, without
+measuring query runtime. To reduce dependence on a single drift simulator, we
+also evaluate out-of-distribution drift families and benchmark-inspired DML
+traces with explicit insert, update, and delete events.
+
+The contributions are:
+\begin{itemize}
+  \item We formulate feedback-driven single-column statistics correction as a
+        DBMS-facing problem---given a stale histogram and a causal window of
+        predicate feedback, produce corrected statistics that improve future
+        selectivity estimates without rescanning the table---and instantiate a
+        PostgreSQL-style adapter that maps MCV+histogram statistics to a
+        canonical quantile/CDF view and back, isolating engine-specific logic
+        from the correction model.
+  \item We design OASIS, a two-stage statistics-layer pipeline: a lightweight
+        learned model predicts corrected quantile boundaries from prior quantiles
+        and heterogeneous feedback, and a feedback-consistency projection
+        calibrates the learned marginal before it is exposed downstream.
+  \item We show that both stages are necessary and that the projection is part of
+        the method, not optional post-processing. The learned stage extrapolates
+        drift beyond the observed feedback window, while local-feedback methods
+        are constrained by observed predicates and do not learn a reusable global
+        drift-repair function. Its raw output is not feedback-consistent and is
+        amplified by downstream composition; in the bilinear FactorJoin join
+        kernel the stage-one marginal is actively worse than stale, a failure
+        the projection mitigates.
+  \item We give an optimizer-facing evaluation that measures the mechanism where
+        it acts, without query runtime: single-column drift, structural and
+        initial-distribution generalization, a six-estimator composition family
+        (independence, IPF/Sinkhorn, and Gaussian/Clayton/Gumbel/Frank copulas)
+        and the FactorJoin join kernel that consume OASIS as a drop-in marginal
+        source, a 12-configuration PostgreSQL planner-only statistics-injection
+        study, and deployment-safety checks under sparse, noisy, and
+        trace-grounded feedback.
+\end{itemize}
+
+\section{Background and Problem Formulation}
+\label{sec:background}
+
+\subsection{Column Statistics and the Staleness Gap}
+
+We model a column histogram as an equi-depth quantile summary with $B$ buckets.
+The internal boundaries $v_1,\ldots,v_{B-1}$ correspond to fixed quantile
+levels $p_1,\ldots,p_{B-1}$. A range predicate such as $x < c$ is estimated by
+evaluating the piecewise-linear CDF implied by those boundaries. Although real
+DBMS statistics may combine histograms with auxiliary summaries such as
+most-common-value lists, density vectors, or null fractions, OASIS operates on
+a canonical one-dimensional CDF view.
+
+Let $H_0$ denote the stale histogram captured at the last statistics refresh
+and $H^*$ denote the current post-drift distribution. For a predicate $\sigma$,
+the optimizer derives an estimate $\hat{s}_{H_0}(\sigma)$ while the executor
+can later reveal an actual selectivity $s^*(\sigma)$. We measure selectivity
+error using Q-error:
+\begin{equation}
+  \mathrm{QErr}(\hat{s},s^*) =
+  \max\left(\frac{\hat{s}}{s^*}, \frac{s^*}{\hat{s}}\right).
+  \label{eq:qerr}
+\end{equation}
+
+\subsection{Statistics Correction}
+
+Given a stale histogram $H_0$ and an observation window
+$\mathcal{O}=\{o_1,\ldots,o_K\}$, where each observation records a predicate
+type, predicate boundary, estimated selectivity, and actual selectivity, the
+goal is to produce corrected statistics $\hat{H}$ such that future predicates
+are estimated more accurately:
+\[
+  \mathbb{E}_{\sigma}\left[
+    \mathrm{QErr}\left(\mathrm{CDF}_{\hat{H}}(\sigma),s^*_{\sigma}\right)
+  \right]
+  <
+  \mathbb{E}_{\sigma}\left[
+    \mathrm{QErr}\left(\mathrm{CDF}_{H_0}(\sigma),s^*_{\sigma}\right)
+  \right].
+\]
+The expectation is over future predicates from the workload distribution.
+
+The solution must satisfy three deployment constraints. First, it must avoid
+table rescans, deriving $\hat{H}$ only from $H_0$ and recent feedback. Second,
+it must be cheap enough to run near query-planning time. Third, it must degrade
+gracefully when feedback is sparse or uninformative, preserving the stale prior
+rather than applying large unsupported corrections.
+
+\subsection{Scope}
+
+OASIS targets single-column histogram staleness. It does not repair
+multi-column correlation errors, join-key dependence, physical design
+problems, or cost-model calibration. These terms remain in the optimizer's
+error budget even if the single-column histogram is accurate. The role of
+OASIS is to improve the marginal statistics that many downstream estimators and
+optimizers already consume.
+
+\section{OASIS Design}
+\label{sec:design}
+
+\subsection{System Overview}
+
+OASIS sits between the statistics store and the optimizer. When the optimizer
+requests a histogram, OASIS reconstructs a canonical quantile representation,
+retrieves a recent observation window for the column, predicts corrected
+quantile boundaries (Stage 1), applies a feedback-consistency projection
+(Stage 2), and returns an engine-native statistics object to the CBO. Query execution remains
+unchanged except for lightweight per-conjunct feedback collection.
+
+\subsection{Feature Representation}
+
+The correction model consumes a fixed tensor containing four blocks. The prior
+block stores the normalized quantile boundaries of $H_0$. The meta block stores
+the null fraction, observation count ratio, and bucket count. The observation
+block stores up to $K$ recent predicate observations; each observation contains
+a predicate-type encoding and numeric features for predicate bounds, estimated
+selectivity, actual selectivity, and recency. The mask block marks valid
+observation slots. In our implementation $B=10$ and $K=16$, producing a compact
+input representation.
+
+\subsection{Correction Model}
+
+OASIS uses a pooled MLP with a prior encoder, an observation encoder, an
+attention-like pooling layer over the observation window, and a residual output
+head that predicts corrections to the internal quantile boundaries. Residual
+prediction encourages conservative behavior when the feedback window is
+uninformative. The predicted boundaries are clamped to the normalized domain
+and projected into monotone order to ensure a valid CDF.
+
+The model is trained offline on simulation-derived compound drift. Each
+training sample contains a stale prior, a causal feedback window, and
+post-drift quantile targets. Once trained, the same checkpoint is reused across
+columns in the evaluation; no per-table or per-distribution retuning is used.
+
+\subsection{Feedback Collection and Integration}
+\label{sec:integration}
+
+OASIS requires two integration points. A query-completion listener records
+predicate-level feedback from executor row-count instrumentation. A
+statistics-assembly hook intercepts the histogram before it reaches the
+optimizer and substitutes the corrected version. Because the correction is
+inserted at the statistics layer, the optimizer's search procedure and cost
+model remain unchanged.
+
+\subsection{Statistics-Format Conversion}
+\label{sec:mcv-adapter}
+
+Many DBMSs do not expose a standalone editable equi-depth histogram.
+PostgreSQL, for example, couples histogram boundaries with MCV lists and other
+per-column summaries. We instantiate the interface for PostgreSQL-style
+statistics and design it to isolate engine-specific adapters. The adapter has
+three phases: reconstruct a canonical distribution view from the native object,
+apply correction on the canonical view, and decompose the corrected view back
+into native statistics fields. This paper validates the PostgreSQL-style
+MCV+histogram instantiation; other engines require their own adapter logic.
+
+\subsection{Stage 2: Feedback-Consistency Projection}
+\label{sec:oasis-proj}
+
+The learned stage (Stage 1) predicts a global marginal correction from learned
+drift patterns; we call this stage-one-only output OASIS-noProj. For planner use,
+however, the corrected CDF must also be reliable near the predicates that have
+just been observed. This local requirement is especially important before
+multi-column composition, where a small one-dimensional CDF mismatch can become a
+larger joint-selectivity error. The second stage therefore applies a lightweight
+projection after the Stage-1 prediction. The projection uses the OASIS-noProj
+histogram as the starting point and adjusts it to satisfy the current feedback
+constraints as closely as possible under an ISOMER/IPF-style consistency
+principle. This step remains a single-column calibration layer; it does not
+estimate multi-column dependence. The output of the full two-stage pipeline is
+what we denote OASIS, and it is the form deployed to downstream estimators and
+planners.
+
+\section{Experimental Methodology}
+\label{sec:experiments}
+
+The evaluation asks five questions. First, does the statistics-format
+conversion preserve probability mass and selectivity estimates? Second, how
+much does OASIS improve single-column histogram quality under drift? Third,
+when do corrected marginals compose safely with downstream multi-column
+estimators, and when is feedback consistency required? Fourth, do corrected
+statistics affect a real PostgreSQL optimizer pipeline in the intended
+direction, without measuring runtime? Fifth, what safety checks are needed
+when feedback is sparse, noisy, or trace-like rather than drawn from the
+training generator?
+
+Unless otherwise stated, OASIS is trained once on Gaussian compound drift with
+$q\in\{1,3,5,10,15,20\}$ and evaluated on held-out drift intensities
+$q\in\{1,3,5,10,15,20,25,30\}$. All feedback-driven methods consume the same
+observation budget $K=16$ and emit corrected quantiles on the same $B=10$ grid.
+We compare against the stale prior, STHoles~\cite{bruno2001stholes},
+ISOMER~\cite{markl2007consistent}, QuickSel-H~\cite{park2020quicksel}, and
+simple feedback heuristics. Metrics include Q-error, selectivity MAE, quantile
+MAE, feedback residual, PostgreSQL estimated-row Q-error, and plan-shape match
+to the fresh-statistics planner. For deployment-sensitivity diagnostics that
+require many perturbed runs, we also use a transparent optimizer-decision proxy:
+future predicates are generated from held-out distributions, each statistics
+state selects scan and join choices under a fixed cost proxy, and the selected
+choice is scored by its true proxy cost. This proxy is used only to analyze
+feedback-budget and feedback-noise behavior; it is not a runtime benchmark.
+
+\section{Single-Column Statistics Correction}
+\label{sec:single-column-results}
+
+\subsection{Format-Conversion Validation}
+
+The PostgreSQL-style MCV+histogram conversion preserves total probability mass
+exactly in the tested settings. Round-trip residual-quantile MAE is at machine
+precision, with mean $2.4\times10^{-17}$ and maximum $9.2\times10^{-17}$.
+Selectivity estimates remain consistent before and after conversion, with
+global MAE $1.1\times10^{-4}$ and worst-case error below 0.39\%. With
+PostgreSQL-like defaults, the full round trip completes in 0.066--0.073 ms.
+This validates the PostgreSQL-style conversion as a low-overhead bridge between
+native statistics and the canonical OASIS view.
+
+\subsection{Q-Error Across Drift Intensity}
+\label{sec:main_results}
+
+\begin{figure*}[t]
+  \centering
+  \adjustbox{max width=.82\textwidth}{%
+    \includegraphics{figures/fig_single_column_drift_qerror.pdf}}
+  \caption{Single-column selectivity Q-error across drift intensity. All
+  methods consume the same feedback budget. This figure isolates the learned
+  repair stage (OASIS-noProj), which remains close to the stale prior at mild
+  drift and becomes strongest as drift grows; the full two-stage OASIS is
+  compared in Table~\ref{tab:single_column_projection}.}
+  \label{fig:single_column_drift_qerror}
+\end{figure*}
+
+Figure~\ref{fig:single_column_drift_qerror} reports the main single-column
+result. Because direct single-column evaluation has no downstream composition to
+violate, this section isolates the learned repair stage (OASIS-noProj); the full
+two-stage OASIS is evaluated where the projection matters, in
+Sections~\ref{sec:marginal_joint}--\ref{sec:postgres-planner}, and compared on
+single-column accuracy in Table~\ref{tab:single_column_projection}. At mild drift
+($q=1$), ISOMER is strongest and OASIS-noProj remains close to the stale prior,
+consistent with the graceful-degradation objective. From $q\geq5$, OASIS-noProj
+is the best method under the shared feedback budget. At $q=10$, $20$, and $30$,
+it reduces Q-error over the stale prior by 51.3\%, 57.9\%, and 60.6\%,
+respectively, outperforming ISOMER in this moderate-to-large drift regime.
+ISOMER is constrained by the observed feedback window rather than a learned
+global drift prior. The advantage persists on unseen drift intensities $q=25$
+and $q=30$.
+
+\begingroup
+\oasisUseMaxWidthResize{.84\columnwidth}
+\input{../experiments/results/synthetic_paper_suite_tree_isomer_v3/main/table_simple_baselines.tex}
+\endgroup
+
+Table~\ref{tab:simple_baselines} compares OASIS-noProj with simple feedback
+heuristics. Fixed linear interpolation and exponential feedback averaging are
+substantially weaker than learned correction; FeedAvg worsens estimation in
+all tested settings. This shows that the gains are not simply due to using
+feedback, but to learning how the prior and observations should interact.
+
+\subsection{Structural Metrics and Initial-Distribution Generalization}
+\label{sec:structural-generalization}
+
+\begingroup
+\oasisUseMaxWidthResize{.96\textwidth}
+\input{../experiments/results/synthetic_paper_suite_rerun_20260529/main/table_structural_metrics.tex}
+\endgroup
+
+Table~\ref{tab:mae} shows that OASIS-noProj improves structural histogram
+quality, not only Q-error. At $q=10$, quantile MAE drops from 0.208 for the stale
+prior to 0.055 for OASIS-noProj, and selectivity MAE drops from 0.190 to 0.049.
+OASIS-noProj remains the best method on both metrics for every $q\geq5$.
+
+\begingroup
+\oasisUseMaxWidthResize{.90\columnwidth}
+\input{../experiments/results/synthetic_paper_suite_tree_isomer_v3/distribution/table_distribution.tex}
+\endgroup
+
+Table~\ref{tab:dist_generalization} evaluates transfer across initial
+distributions at $q=10$. The learned stage (OASIS-noProj), trained on
+Gaussian-mixture initial states, remains best across uniform, skewed, bimodal,
+triangular, exponential, and Gaussian-mixture starts, reducing Q-error by
+44\%--61\% over the stale prior.
+
+\begingroup
+\let\oasisOriginalCaption\caption
+\renewcommand{\small}{\footnotesize}
+\renewcommand{\caption}[1]{\oasisOriginalCaption{Single-column selectivity
+Q-error ($\downarrow$) of the full two-stage OASIS versus the OASIS-noProj
+ablation, on in-distribution compound drift. At mild drift $q=1$, ISOMER is
+lowest; from $q\geq3$, the full OASIS stays below ISOMER, so the deployed
+(projected) form preserves a learned single-column advantage in the
+moderate-to-large drift regime. The projection costs only a small amount relative
+to the stage-1 ablation, the price paid for the downstream composition and join
+safety shown in Tables~\ref{tab:marginal_joint}, \ref{tab:composition_family}
+and \ref{tab:factorjoin}.}}
+\input{../experiments/results/single_column_projection_20260531/table_single_column_projection.tex}
+\endgroup
+
+The single-column results so far isolate Stage 1. Table~\ref{tab:single_column_projection}
+adds the deployed two-stage OASIS. Applying the Stage-2 projection costs only a
+small amount of single-column accuracy relative to OASIS-noProj (aggregate
+Q-error 1.307 versus 1.254), because direct single-column evaluation has no
+downstream estimator to violate. At mild drift $q=1$, ISOMER remains lower
+(1.092 versus 1.111), but from $q\geq3$ the full OASIS stays below ISOMER. Thus
+the deployed form preserves a learned single-column advantage in the
+moderate-to-large drift regime; this small projection cost is the price paid for
+the downstream composition and join safety established in the following
+sections.
+
+\subsection{Out-of-Distribution Drift Realism}
+\label{sec:ood-drift-realism}
+
+The main OASIS checkpoint is trained on compound drift. To test whether the
+learned correction is useful beyond that generator, we evaluate it unchanged on
+six deployment-inspired drift families: batch loads, range shifts, skew
+evolution, outlier bursts, multimodal drift, and seasonal/mixed drift. Each
+case starts from a stale histogram, interleaves the new drift family with 16
+feedback observations, and evaluates future selectivity against the final
+post-drift distribution. No OOD retraining is used.
+
+\begin{figure*}[t]
+  \centering
+  \adjustbox{max width=.94\textwidth}{%
+    \includegraphics{figures/fig_ood_drift_realism.pdf}}
+  \caption{Out-of-distribution drift realism suite. OASIS is trained only on
+  compound drift and evaluated unchanged on deployment-inspired drift families.
+  Bars report the percentage reduction in geometric-mean selectivity Q-error
+  relative to stale statistics for the same drift family; higher is better. The
+  dashed zero line is stale, and black ticks show the fresh post-drift
+  reference.}
+  \label{fig:ood_drift_realism}
+\end{figure*}
+
+Figure~\ref{fig:ood_drift_realism} shows that the correction path remains useful
+under these unseen drift mechanisms. The strongest OOD stress case is batch
+loading, where stale Q-error is 4.203; OASIS-noProj reduces it to 1.280,
+outperforming ISOMER's 1.461, and the full OASIS further improves to 1.272. On
+range shift, skew evolution, outlier, multimodal, and seasonal drift,
+OASIS is the best non-fresh method, with Q-error between 1.057 and 1.187.
+This experiment is not a substitute for production trace validation, but it
+shows that the gains are not confined to the compound-drift generator used for
+training.
+
+\subsection{Benchmark-Inspired DML Trace Sanity Check}
+\label{sec:trace-grounded-drift}
+
+The OOD suite changes the drift family, but it still uses synthetic drift
+operators. We therefore add a second realism check with explicit DML event
+streams anchored to analytical benchmark table/column patterns:
+append-heavy sales dates, promotion price revisions, inventory restocking,
+returns and cancellations, customer segment churn, and seasonal mixed
+maintenance. Each trace emits insert, update, and delete counts before a
+feedback observation is collected. These traces are not production logs or DBMS
+telemetry; they are a transparent sanity check that the correction layer remains
+useful when drift is produced by event sequences rather than by the compound
+training generator.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=.98\textwidth]{figures/fig_trace_grounded_drift.pdf}
+  \caption{Benchmark-inspired DML trace sanity check. Each trace emits explicit
+  insert/update/delete events anchored to an analytical benchmark maintenance
+  pattern. Cells report the percentage reduction in geometric-mean selectivity
+  Q-error relative to stale statistics for the same trace; higher is better,
+  while negative values indicate regressions below stale. Stale is $0\%$ by
+  definition, and the Fresh row shows the post-drift reference.}
+  \label{fig:trace_grounded_drift}
+\end{figure*}
+
+Figure~\ref{fig:trace_grounded_drift} reinforces the same deployment pattern
+under event-sequence drift. Across the six traces, stale statistics have
+aggregate Q-error 1.295; the full OASIS reduces this to 1.076 and residual-gated
+Hybrid to 1.072. OASIS is the best non-fresh method on sales append and
+returns/cancellation traces, where the stale histogram is visibly shifted. On
+the milder price, inventory, customer, and seasonal traces, ISOMER is best or
+tied because enforcing the current feedback window is sufficient. OASIS-noProj
+can regress on these mild update-heavy traces, which supports the two-stage
+design: the learned stage is useful, but the statistics object passed to a
+planner should be the projected (full) OASIS or residual-gated Hybrid.
+
+\section{Optimizer-Facing Evaluation}
+\label{sec:optimizer-facing}
+
+\subsection{Counterfactual Selectivity Evaluation}
+\label{sec:counterfactual-selectivity}
+
+We first isolate the causal effect of the statistics state on selectivity
+estimation. The same held-out drift samples are evaluated under stale,
+OASIS-noProj-corrected, and simulated sampled-refresh statistics, while the
+underlying post-drift distribution and predicates are held fixed. This is not a
+runtime benchmark; it measures selectivity Q-error under controlled statistics
+states.
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Counterfactual selectivity evaluation on compound drift test data.
+  ``Sampled-Refresh'' is a simulated column-level resampling proxy. Recovery
+  measures the fraction of fresh/oracle Q-error improvement recovered by the
+  learned stage (OASIS-noProj). No query runtime is measured.}
+  \label{tab:counterfactual_selectivity}
+  \setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{c r r r r r}
+    \toprule
+    $q$ & \#Pred & Stale QE & Sampled-Refresh & OASIS-noProj QE & Recovery \\
+    \midrule
+     5 & 30 & 1.714 & 1.492 & \textbf{1.263} & 69\% \\
+    10 & 30 & 2.720 & 2.121 & \textbf{1.232} & 77\% \\
+    15 & 30 & 2.798 & 2.183 & \textbf{1.284} & 74\% \\
+    20 & 30 & 2.779 & 2.201 & \textbf{1.389} & 64\% \\
+    \midrule
+    \textbf{Mean} & 120 & 2.503 & 1.999 & \textbf{1.292} & 71\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab:counterfactual_selectivity} shows that OASIS-noProj recovers
+64\%--77\% of the fresh/oracle improvement and substantially outperforms the
+sampled-refresh proxy. The result should be interpreted as per-predicate
+selectivity evidence, not as evidence of wall-clock query acceleration.
+
+\subsection{Does the Learned Stage Help After Projection?}
+\label{sec:projection-init}
+
+A reasonable concern about the two-stage design is whether the learned stage
+contributes anything once the projection is applied: in several aggregate
+downstream tables the full OASIS and ISOMER are close. We isolate the question
+with a projection-initialization ablation. We hold the projection operator and
+the feedback constraints fixed and vary only the marginal that initializes the
+projection: initializing from the stale histogram reproduces ISOMER,
+initializing from the learned stage gives the full OASIS, and initializing from
+the post-drift marginal is a reference upper bound. All variants are scored on
+held-out future predicates, not on the feedback window they were fit to.
+
+\begingroup
+\oasisUseMaxWidthResize{.96\textwidth}
+\input{../experiments/results/projection_locality_20260531/table_projection_initialization.tex}
+\endgroup
+
+Table~\ref{tab:projection_initialization} shows that the learned stage is not
+decorative. Holding the projection fixed, initializing from the learned marginal
+lowers future-predicate Q-error from 1.536 (ISOMER) to 1.446 (full OASIS), a
+5.9\% reduction, and the advantage grows monotonically with drift: $+6.8\%$,
+$+10.9\%$, and $+13.0\%$ at $q=10$, $20$, and $30$, while the two methods are
+within noise at $q=1$. Per-predicate, the full OASIS beats ISOMER on 55.9\% of
+held-out predicates, up to 60.9\% at $q=20$. A threshold-only predicate
+population gives the same pattern more mildly ($+4.3\%$ overall, $+8.8\%$ at
+$q=30$).
+
+Two further readings support the claim that both stages are necessary. First,
+the columns form a clean initialization-quality ladder---stale 1.536, learned
+1.446, fresh 1.157---so a better starting marginal yields a better projected
+result, and the learned initialization closes about a quarter of the
+ISOMER-to-fresh headroom. Second, neither stage alone reaches the two-stage
+result: the raw learned marginal (OASIS-noProj, 1.645) is worse than ISOMER on
+this metric, and ISOMER (projection from a stale start) is worse than the full
+OASIS. This also explains why aggregate downstream tables show ISOMER and the
+full OASIS closer: the learned stage's measurable advantage is on the marginal's
+future-predicate accuracy, and how much of it survives depends on how strongly a
+given downstream estimator's error is dominated by the marginal. A finer
+locality decomposition is given in Appendix~\ref{sec:appendix-locality}.
+
+\subsection{Marginal-to-Joint Composition}
+\label{sec:marginal_joint}
+
+This experiment studies composition rather than replacing multi-column
+cardinality-estimation methods. OASIS repairs one-dimensional marginals, so the
+question is how those repaired marginals behave when a downstream estimator
+combines them under a fixed dependence assumption. We generate correlated
+two-column tables with drift, correct each single-column marginal
+independently, and feed the marginals into two joint estimators: independence,
+the maximum-entropy estimate under only one-dimensional marginal constraints,
+and a Gaussian copula with fixed correlation structure. Fresh uses post-drift
+marginal inputs under the same downstream estimator; it is not an oracle joint
+distribution.
+
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Marginal-to-joint composition: average Q-error ($\downarrow$) for
+  two-column range predicates. Values average configuration-level geometric
+  means over 20 correlation/drift settings. OASIS is the full two-stage system;
+  OASIS-noProj is the learned stage without the feedback-consistency projection;
+  Hybrid uses only feedback-window residuals for selection.}
+  \label{tab:marginal_joint}
+  \setlength{\tabcolsep}{4pt}
+  \adjustbox{max width=.94\textwidth}{%
+  \begin{tabular}{l | rrrrrr | rrr}
+    \toprule
+    Estimator & Stale & OASIS-noProj & ISOMER & OASIS & Hybrid & Fresh &
+    OASIS-noProj +\% & OASIS +\% & Hybrid +\% \\
+    \midrule
+    Independence / max-entropy & 1.820 & 1.679 & 1.220 & 1.222 &
+    \textbf{1.214} & 1.185 & +7.9\% & +31.8\% & +32.2\% \\
+    Gaussian copula & 1.558 & 1.513 & 1.185 & 1.176 &
+    \textbf{1.166} & 1.139 & +2.4\% & +23.1\% & +23.8\% \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}
+
+Table~\ref{tab:marginal_joint} gives the main diagnostic result. Despite the
+strong single-column performance of the learned stage, OASIS-noProj provides only
+modest and unstable gains after two-column composition: it improves average joint
+Q-error by 7.9\% under independence and by 2.4\% under the Gaussian copula. ISOMER
+is substantially stronger in this setting because it enforces current feedback
+constraints. The attribution explains the gap: OASIS-noProj improves marginal
+Q-error over stale in only 43.6\% of composition rows and beats ISOMER on marginal
+Q-error in only 3.9\%. Thus, the learned stage should not be interpreted as a
+stable multi-column correction method on its own.
+
+The two-stage design resolves this directly: the projection stage calibrates the
+learned marginal before composition, without changing the dependence model. By
+projecting the OASIS-noProj marginal onto the feedback constraints, the full
+OASIS reaches Q-error 1.222 under independence and 1.176 under the Gaussian
+copula, nearly matching ISOMER and approaching fresh marginal inputs. Hybrid
+provides a conservative deployment policy by choosing among stale, ISOMER,
+OASIS-noProj, and OASIS using only feedback-window residuals.
+
+\subsection{Composition-Family Generalization}
+\label{sec:composition-family}
+
+The two-column study above uses two downstream estimators. A natural concern is
+whether the deployment pattern---OASIS-noProj is an unstable composition input,
+and the feedback-consistency projection is required---is specific to those two
+estimators or general across composition methods that consume single-column
+marginals. We therefore embed OASIS as a drop-in marginal source in a family of
+six independently designed composition estimators and vary only the marginal
+input. The family covers the independence/maximum-entropy estimator,
+iterative proportional fitting (IPF/Sinkhorn) on a two-dimensional grid, and
+four copulas with distinct dependence structure: Gaussian, Clayton, Gumbel, and
+Frank. To keep the comparison a clean marginal ablation and to respect the scope
+boundary that OASIS does not infer dependence, the dependence structure is held
+fixed and identical for every marginal input: each copula uses one association
+parameter derived from the data-generating correlation, and IPF seeds its
+cell-level association from a stale two-dimensional sketch and only reconciles it
+with each method's corrected one-dimensional marginals. The Archimedean copulas
+are intentionally mis-specified models for the Gaussian-correlated data, which
+tests whether the marginal-repair benefit survives an imperfect dependence model.
+
+\begingroup
+\oasisUseMaxWidthResize{.96\textwidth}
+\input{../experiments/results/composition_family_20260531/table_composition_family.tex}
+\endgroup
+
+Table~\ref{tab:composition_family} confirms both halves of the deployment story
+across the whole family. OASIS-noProj again gives only weak and inconsistent
+composition gains (between $+4.2\%$ and $+14.4\%$ over stale), whereas the full
+OASIS improves every estimator by $22.2\%$--$38.1\%$ and Hybrid by
+$22.7\%$--$38.4\%$, in each case approaching the fresh-marginal input. The gain
+therefore does not depend on any single dependence model, and it persists even
+under the mis-specified Archimedean copulas. This generalizes the calibration
+finding from two estimators to a method family: the learned stage is a useful
+input to existing composition estimators, but the feedback-consistency
+projection is what makes it a stable one.
+
+\subsection{FactorJoin Integration}
+\label{sec:factorjoin}
+
+The previous composition studies remain single-table. To test whether corrected
+marginals propagate into a learned \emph{join} cardinality estimator, we embed
+OASIS in the bin-based join kernel of FactorJoin~\cite{wu2023factorjoin}. For an
+equi-join $A.k = B.k$, FactorJoin partitions the join-key domain into bins and
+estimates the join size as
+$\sum_{\text{bin}} \mathrm{cnt}_A[\text{bin}]\,\mathrm{cnt}_B[\text{bin}]/\mathrm{dv}[\text{bin}]$,
+where each table's per-bin key frequency $\mathrm{cnt}_T[\text{bin}]$ is read
+from a single-column histogram of its join-key distribution. We reimplement this
+kernel and make the per-table key histogram the OASIS-correctable object: when
+the key distribution drifts, a stale histogram yields wrong per-bin frequencies
+and a wrong join estimate. The two tables' keys are generated independently, so
+the only quantity that varies across methods is the quality of each single-column
+key histogram; the binning, the distinct-values-per-bin assumption, and the row
+counts are identical for all methods. The metric is join-cardinality Q-error
+against the exact join size on the drifted data; no query runtime is measured.
+
+\begingroup
+\renewcommand{\small}{\scriptsize}
+\input{../experiments/results/factorjoin_oasis_20260531/table_factorjoin.tex}
+\endgroup
+
+\begin{figure}[t]
+  \centering
+  \adjustbox{max width=.92\columnwidth}{%
+    \includegraphics{figures/fig_factorjoin_oasis.pdf}}
+  \caption{FactorJoin join-cardinality Q-error by drift intensity for the
+  deployed/calibrated marginal sources. Values are the residual gap to the
+  fresh-marginal floor, normalized by the stale-to-fresh gap; $0\%$ is fresh and
+  $100\%$ is stale, so lower is better. The no-projection ablation is reported
+  in Table~\ref{tab:factorjoin}; the full OASIS and Hybrid stay near the
+  fresh-marginal floor.}
+  \label{fig:factorjoin}
+\end{figure}
+
+Table~\ref{tab:factorjoin} shows the strongest form of the calibration finding,
+and Figure~\ref{fig:factorjoin} visualizes the deployable calibrated methods on
+a stale-to-fresh-normalized scale.
+In Table~\ref{tab:factorjoin}, OASIS-noProj does not merely underperform---it is actively harmful, raising
+aggregate join Q-error above the stale baseline ($-13.5\%$, and as much as
+$-22.7\%$ at moderate drift). The mechanism is structural: the FactorJoin
+estimate is a bilinear functional of the two per-bin mass vectors, so it is
+sensitive to mass concentration rather than to coarse range selectivity. The
+learned stage, trained to minimize range-selectivity error, can return a
+directionally correct but over-concentrated histogram---occasionally with
+collapsed boundaries after monotone clamping---whose fine-grained mass profile
+inflates $\sum_{\text{bin}} p_A p_B$ and therefore the join estimate. The
+feedback-consistency projection mitigates this failure: the full OASIS improves
+over stale at every tested drift level ($12.3\%$--$23.6\%$, with $15.6\%$
+aggregate gain), Hybrid improves by $13.4\%$--$23.8\%$, and both closely track
+the fresh-marginal input. The effect is stable as the join-bin count varies from
+10 to 100. The broader lesson
+sharpens the deployment boundary: the more nonlinear the downstream composition,
+the more essential feedback-consistency calibration becomes, and a join estimator
+should consume the full OASIS rather than the raw learned marginal.
+
+\subsection{PostgreSQL Planner-Only Statistics Injection}
+\label{sec:postgres-planner}
+
+The previous experiments evaluate selectivity and downstream estimator
+behavior. We next validate that corrected statistics can affect a real DBMS
+optimizer pipeline. The PostgreSQL experiment creates a synthetic table with
+fresh current data, builds alternative single-column statistics for
+\texttt{fact.x}, and injects them into \texttt{pg\_statistic} by copying typed
+statistics rows from analyzed source tables. For each query, true cardinality
+is obtained with \texttt{COUNT(*)}; PostgreSQL estimated rows and plan shape are
+obtained with \texttt{EXPLAIN (FORMAT JSON)}. The experiment does not measure
+query runtime.
+
+\begingroup
+\oasisUseMaxWidthResize{.88\columnwidth}
+\input{../experiments/results/postgres_planner_stats_injection_batch_20260529/table_postgres_planner_stats_injection_batch.tex}
+\endgroup
+
+Table~\ref{tab:postgres_planner_stats_injection_batch} provides the strongest
+DBMS-facing evidence in this paper. The batch covers two drift directions,
+two table sizes, and three random seeds, yielding 12 PostgreSQL configurations.
+Across all query instances, stale statistics produce aggregate row Q-error
+27.748 and match the fresh-statistics plan shape on only 56.0\% of queries.
+OASIS-noProj reduces row Q-error to 3.306 and recovers 91.7\% of stale/fresh
+plan-shape disagreements, demonstrating that learned marginal correction
+propagates into PostgreSQL's native planner. However, the learned stage alone
+also introduces new plan deviations in 13.8\% of cases where stale statistics
+already matched fresh.
+
+The full OASIS largely removes this safety issue. It reduces aggregate row
+Q-error to 2.360, matches the fresh-statistics plan shape on 96.1\% of queries,
+recovers 92.6\% of stale/fresh plan-shape disagreements, and reduces new plan
+deviations to 1.1\%. Across configurations, mean row Q-error is
+$2.375\pm0.275$ for OASIS, $2.372\pm0.283$ for ISOMER, and
+$3.313\pm0.228$ for OASIS-noProj. The planner-only result supports the two-stage
+design: the learned stage provides the global marginal correction, while the
+projection stage calibrates it before the DBMS planner consumes it.
+
+\begin{figure*}[t]
+  \centering
+  \adjustbox{max width=.94\textwidth}{%
+    \includegraphics{figures/fig_postgres_plan_family.pdf}}
+  \caption{PostgreSQL planner-only plan-shape effects by query family. Cell
+  labels are percentages. Panel A reports fresh-statistics plan-shape match,
+  Panel B reports recovery of stale/fresh mismatches, and Panel C reports new
+  deviations where stale already matched fresh.}
+  \label{fig:postgres_plan_family}
+\end{figure*}
+
+Figure~\ref{fig:postgres_plan_family} breaks the PostgreSQL result
+down by query family. Stale statistics disagree with the fresh-statistics plan
+on 95/336 selection queries, 215/336 join queries, and 134/336
+join-with-dimension-filter queries. The full OASIS matches the fresh plan on
+98.5\% of selections, 92.3\% of joins, and 97.6\% of filtered joins. The
+safety benefit over the learned stage alone is clearest in new deviations:
+OASIS-noProj creates new plan-shape deviations in 7.5\%, 19.8\%, and 17.8\% of
+the three families, whereas the full OASIS reduces these rates to 0.0\%, 5.0\%,
+and 0.0\%.
+
+\subsection{Feedback Budget and Noise Sensitivity}
+\label{sec:feedback-sensitivity}
+
+The deployment form of OASIS depends on two practical conditions: how many
+recent feedback observations are available and how accurate those feedback
+observations are. To stress these conditions without running additional DBMS
+loads, we use the optimizer-decision proxy described in
+Section~\ref{sec:experiments}. All methods see the same feedback window and
+future predicates; only the feedback budget or feedback values are changed.
+
+\begin{figure*}[t]
+  \centering
+  \adjustbox{max width=.90\textwidth}{%
+    \includegraphics{figures/fig_feedback_sensitivity.pdf}}
+  \caption{Feedback-budget and feedback-noise sensitivity in the
+  optimizer-decision proxy. Panels A--B vary the visible feedback window $K$;
+  Panels C--D perturb feedback selectivities with multiplicative log-normal
+  noise while holding future predicates fixed. Dashed lines denote fresh
+  statistics.}
+  \label{fig:feedback_sensitivity}
+\end{figure*}
+
+Panels A--B of Figure~\ref{fig:feedback_sensitivity} vary the number of visible
+feedback observations. With only two observations, consistency projection is
+helpful but limited: the full OASIS reaches selectivity Q-error 2.233 and Hybrid
+matches 84.6\% of optimal join choices, compared with stale Q-error 2.867 and
+79.0\% join-optimal choices. As the window grows, the learned correction and
+projection become more complementary. At $K=16$, the full OASIS reaches Q-error
+1.518 and Hybrid reaches 1.504, with 91.1\%--91.2\% join-optimal choices.
+Hybrid's selections also show that no single component dominates all cases: at
+$K=16$, it selects ISOMER for 37\% of cases, the full OASIS for 47\%,
+OASIS-noProj for 14\%, and stale for 2\%.
+
+Panels C--D perturb feedback selectivities with
+multiplicative log-normal noise while keeping the future predicates and true
+selectivities fixed. The diagnostic uses 64 held-out cases per drift intensity
+and one noise seed. At 10\% feedback noise, the full OASIS still improves
+selectivity Q-error from 2.868 to 1.580 and maintains 90.5\% join-optimal
+choices; Hybrid reaches Q-error 1.565 with the same join-optimal rate. ISOMER
+is more sensitive to noise in this setting, rising from Q-error 1.677 at clean
+feedback to 1.779 at 10\% noise. The result supports the role of the projection
+stage as a calibration layer, but it also motivates residual-based gating and
+abstention when feedback attribution is unreliable.
+
+\subsection{Deployment Safety Summary}
+\label{sec:deployment-safety}
+
+\begingroup
+\oasisUseMaxWidthResize{.97\textwidth}
+\input{../experiments/results/deployment_safety_20260529/table_deployment_safety.tex}
+\endgroup
+
+Table~\ref{tab:deployment_safety} collects the safety evidence that determines
+how OASIS should be deployed. The learned stage alone (OASIS-noProj) improves
+row-estimation accuracy, but it can introduce plan deviations when the stale
+planner already agreed with fresh statistics. The projection stage reduces these
+new deviations from 13.8\% to 1.1\% in the PostgreSQL batch and from 19.8\% to
+5.0\% on join queries. In the optimizer-decision proxy, residual-gated Hybrid
+improves join-optimal choices under sparse feedback, full feedback, and 10\%
+feedback noise while keeping new risky decisions near 1--3\%. On the
+benchmark-inspired DML traces, Hybrid improves aggregate selectivity Q-error
+from 1.295 to 1.072 and selects ISOMER or the full OASIS in 97\% of cases. These
+results make the projection stage and residual gating part of the method,
+rather than optional post-processing.
+
+\section{Overhead and Deployment Considerations}
+\label{sec:overhead}
+
+Per-correction OASIS inference averages 1.06 ms in our implementation,
+including tensorization and one forward pass. The PostgreSQL-style
+statistics-format conversion adds 0.066--0.073 ms, for a combined correction
+cost of approximately 1.13 ms. Feedback collection adds bounded bookkeeping
+per filter conjunct and emits one observation tuple per conjunct at query
+completion. These measurements support the intended use case: maintaining
+optimizer-facing statistics between scheduled statistics refreshes, not
+replacing full refreshes after major schema changes or bulk data shifts.
+
+\section{Related Work}
+\label{sec:related}
+
+Classical histogram construction builds statistics from data scans
+\cite{ioannidis1993histogram,poosala1997selectivity}, while streaming
+summaries such as KLL sketches provide compact approximate quantiles
+\cite{ivkin2019kll}. Adaptive selectivity estimation has long used query
+feedback to refine estimation functions~\cite{chen1994adaptive}.
+Feedback-driven histograms, including self-tuning histograms, STHoles, and
+ISOMER, refine statistics from observed query results
+\cite{aboulnaga1999self,bruno2001stholes,markl2007consistent}. OASIS differs
+by learning a reusable drift-correction function that emits DBMS-consumable
+statistics rather than applying only local per-table refinement rules or
+returning point selectivity estimates.
+
+Learned cardinality estimators such as NeuroCard, Naru, DeepDB, FACE, and MSCN
+predict query cardinalities using learned density or representation models
+\cite{yang2020neurocard,yang2019deep,hilprecht2019deepdb,yang2020face,kipf2019learned}.
+These systems are complementary to OASIS: they often output point estimates for
+specific query classes, while OASIS outputs corrected marginal statistics that
+can be consumed by an existing CBO. Copula-based methods and factorized join
+estimators such as FactorJoin~\cite{wu2023factorjoin} similarly combine
+one-dimensional marginals with a dependence or join-key model; our
+composition-family and FactorJoin experiments embed OASIS as the marginal source
+in exactly these estimators and show that marginal quality and feedback
+consistency are prerequisites for such downstream use.
+
+Plan-level optimization systems such as LEO, Neo, and Bao adjust plan choices
+or optimizer behavior based on execution history
+\cite{stillger2001leo,marcus2019neo,marcus2022bao}. OASIS operates below that
+layer by correcting the statistics object itself. A system could combine both
+approaches: statistics correction supplies better base-table inputs, while
+plan-level learning handles residual cost-model or join-order effects.
+
+\section{Limitations}
+\label{sec:limitations}
+
+The evaluation is limited to tested synthetic drift families, benchmark-inspired
+DML traces, and controlled PostgreSQL planner-only scenarios. The DML traces
+make insert/update/delete event streams explicit, but they are not production
+logs or DBMS telemetry; validating the same correction policy on production
+statistics histories and workload traces remains future work. The PostgreSQL
+batch covers two drift directions, two table sizes, and three random seeds, so
+it validates the statistics-to-planner path more robustly than a single case,
+but it does not establish wall-clock runtime improvement. Runtime depends on
+executor behavior, caching, physical design, system load, and cost-model
+calibration. OASIS also does not infer multi-column dependence from
+single-column feedback. When downstream estimates depend on correlations, an
+external dependence model or multivariate statistics source is still required.
+Finally, feedback itself can be noisy because of predicate attribution,
+sampling, or concurrent updates. Our noise diagnostic shows graceful
+degradation up to 10\% multiplicative feedback noise, but deployments should
+pair correction with residual-based gating, abstention, and rollback policies.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+OASIS repairs stale single-column optimizer statistics from query feedback
+without rescanning tables or modifying the optimizer. It is a two-stage pipeline:
+a compact learned model predicts corrected quantile boundaries from a stale prior
+and recent observations, and a feedback-consistency projection then calibrates
+the learned marginal before it is exposed downstream; a PostgreSQL-style adapter
+connects the canonical correction view to DBMS-native statistics.
+
+The central lesson is that both stages are necessary, and they answer
+complementary failure modes. The learned stage extrapolates drift to future,
+unseen predicates by using a learned global drift prior, while local-feedback
+methods such as ISOMER are constrained by observed feedback. This drives the
+single-column gains across synthetic drift, OOD families, and distribution
+transfer. But a globally plausible learned marginal need not be consistent with
+the predicates just observed, and downstream estimators amplify that
+inconsistency: the stage-one marginal gives only weak and unstable multi-column
+gains and is actively harmful in the bilinear FactorJoin join kernel. The
+projection stage mitigates this downstream failure, at the cost of a small amount
+of single-column peak accuracy. The resulting full OASIS is therefore the
+deployed form---and because it acts at the marginal layer, it embeds as a
+drop-in marginal source for existing composition estimators, improving every
+member of a six-estimator family by 22\%--38\%. In FactorJoin, OASIS-noProj is
+harmful, while the full OASIS recovers stable join-cardinality gains. In the
+12-configuration PostgreSQL planner-only batch, OASIS reduces aggregate
+row-estimation Q-error from 27.748 to 2.360, matches the fresh-statistics plan
+shape on 96.1\% of queries, and keeps new plan deviations near 1\%---where the
+learned stage alone would introduce them---without measuring or claiming query
+runtime improvement. A residual-gated Hybrid policy, choosing among stale,
+ISOMER, OASIS-noProj, and OASIS from the current feedback residual, reduces
+aggregate trace-grounded Q-error from 1.295 to 1.072. This makes OASIS a
+practical component for maintaining optimizer-facing statistics between scheduled
+\texttt{ANALYZE} passes.
+
+\appendix
+
+\section{Feedback-Locality Diagnostic}
+\label{sec:appendix-locality}
+
+To see where the learned stage's advantage comes from, we bin the held-out
+future predicates of Section~\ref{sec:projection-init} by their distance to the
+feedback window. Each predicate endpoint is mapped to fresh-CDF space and
+assigned the directed Hausdorff distance to the nearest feedback endpoint,
+giving near ($\leq 0.05$), mid ($\leq 0.15$), and far ($>0.15$) bins.
+
+\begingroup
+\oasisUseMaxWidthResize{.94\textwidth}
+\input{../experiments/results/projection_locality_20260531/table_feedback_locality.tex}
+\endgroup
+
+Table~\ref{tab:feedback_locality} reports the diagnostic on the mixed predicate
+population. The full OASIS beats ISOMER in every bin, and---restricting to the
+operative drift regime $q\geq5$---by $+9.2\%$, $+6.9\%$, and $+8.0\%$ in the
+near, mid, and far bins. The advantage is therefore not confined to predicates
+near the feedback window. The raw learned marginal (OASIS-noProj) is, by
+contrast, worse than ISOMER in every bin and worst in the far bin, confirming
+that raw learned marginals are not reliably deployable across locality bins; the
+projection turns the learned initialization into a stable statistics object.
+
+The far bin is predicate-type dependent. For a threshold-only population (pure
+$<$/$>$ predicates, which probe only a cumulative CDF level), the far-bin
+advantage shrinks to $+0.8\%$ at $q\geq5$, while near and mid remain strong
+($+7.7\%$ and $+5.4\%$). Range and point predicates, which probe local density
+rather than a cumulative level, retain the far-bin advantage. The learned
+stage's value in uncovered regions therefore comes from better local density,
+which helps range and point queries but adds little to purely cumulative
+threshold queries.
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references}
+
+\end{document}

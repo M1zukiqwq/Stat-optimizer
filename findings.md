@@ -53,6 +53,12 @@
 - OASIS-Proj is best presented as a lightweight deployment calibration step, not as a new correlation model: OASIS learns the global marginal correction, then the projection enforces the current feedback constraints before multi-column composition.
 - The main paper now includes a concise marginal-to-joint table showing plain OASIS weak/mixed, OASIS-Proj/Hybrid near fresh marginals and slightly competitive with ISOMER, plus diagnostic discussion of marginal inconsistency and copula amplification.
 
+## Reviewer-score assessment of `paper/main_is.tex` (2026-06-01)
+
+- Assessed only the current Information Systems manuscript `paper/main_is.tex`, per user clarification; the older `paper/main.tex` should not be used for scoring.
+- Likely VLDB/PVLDB stance: weak reject to borderline. Main reasons: contribution is useful and careful, but the strongest operator is an ISOMER/IPF-style projection plus residual routing; real DBMS evidence is planner-only rather than runtime/end-to-end; experiments are mostly synthetic or trace-proxy; single-column scope limits perceived systems impact for VLDB. A sympathetic reviewer could give weak accept if they value the statistics-layer framing and safety analysis, but the median outcome is probably weak reject/borderline without runtime and live integration.
+- Likely Information Systems stance: major revision, potentially accept after revision. The manuscript fits an extended journal style better: careful problem formulation, extensive ablations, limitations, and broad evaluation ladder. Main revision risks are novelty positioning, result overload, the modest learned-prior gain after calibration, lack of production DBMS workload/runtime evidence, and need to simplify the Stage-2 story. Overall recommendation: major revision rather than reject.
+
 ## Optimizer-decision proxy
 
 - A generator-driven optimizer-facing experiment can avoid wall-clock runtime claims while still testing whether better statistics improve planning signals. The new proxy evaluates scan/join choices selected from estimated selectivities and scores them by true proxy cost using generated ground-truth selectivities.

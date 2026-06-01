@@ -1,13 +1,13 @@
 \begin{table*}[t]
   \centering
   \small
-  \caption{Deployment safety checks. Projection and residual-based Hybrid gating are evaluated without oracle/fresh information. P/I/O/S denote OASIS (full two-stage), ISOMER, OASIS-noProj, and stale choices in the residual gate.}
+  \caption{Deployment safety checks. Projection and residual-based Hybrid gating are evaluated without oracle/fresh information. P/I/O/S denote OASIS, ISOMER, OASIS-noProj, and stale choices in the residual gate.}
   \label{tab:deployment_safety}
   \setlength{\tabcolsep}{4pt}
   \resizebox{\textwidth}{!}{%
   \begin{tabular}{lllll}
     \toprule
-    Check & Risk signal & Unguarded state & Calibrated/gated state & Gate signal \\
+    Check & Risk signal & Unguarded state & Guarded state & Gate signal \\
     \midrule
     PostgreSQL planner & New plan deviations & OASIS-noProj 13.8\% & OASIS 1.1\%; FreshPlan 96.1\% & projection \\
     PostgreSQL joins & Join new deviations & OASIS-noProj 19.8\% & OASIS 5.0\%; Recovery 90.7\% & projection \\

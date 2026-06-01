@@ -685,7 +685,7 @@ def write_outputs(
     lines = [
         "OASIS accuracy/robustness smoke",
         "=" * 44,
-        f"Candidate: {verdict['candidate']} against full OASIS baseline.",
+        f"Candidate: {verdict['candidate']} against OASIS baseline.",
         "",
         "Method                   SelQE  QEImp  SelMAE  QuantMAE  FeedMean  FeedMax  JoinReg  JoinOpt  NewRisk",
         "-" * 108,

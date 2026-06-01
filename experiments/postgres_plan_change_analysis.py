@@ -25,8 +25,8 @@ def method_label(method: str) -> str:
     return {
         "stale": "Stale",
         "isomer": "ISOMER",
-        "oasis": "OASIS",
-        "oasis_projected": "OASIS-Proj",
+        "oasis": "OASIS-noProj",
+        "oasis_projected": "OASIS",
         "hybrid": "Hybrid",
         "fresh": "Fresh",
     }[method]
@@ -191,7 +191,7 @@ def write_family_table(path: Path, rows: Sequence[dict]) -> None:
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
         handle.write("  \\begin{tabular}{lrrrrrrrrr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    \\multirow{2}{*}{Family} & \\multirow{2}{*}{Changed} & \\multicolumn{3}{c}{Stale} & \\multicolumn{3}{c}{OASIS} & \\multicolumn{2}{c}{OASIS-Proj} \\\\\n")
+        handle.write("    \\multirow{2}{*}{Family} & \\multirow{2}{*}{Changed} & \\multicolumn{3}{c}{Stale} & \\multicolumn{3}{c}{OASIS} & \\multicolumn{2}{c}{OASIS} \\\\\n")
         handle.write("    \\cmidrule(lr){3-5}\\cmidrule(lr){6-8}\\cmidrule(lr){9-10}\n")
         handle.write("     & & FreshPlan & Recovery & NewDev & FreshPlan & Recovery & NewDev & FreshPlan & NewDev \\\\\n")
         handle.write("    \\midrule\n")
@@ -223,7 +223,7 @@ def write_examples_table(path: Path, rows: Sequence[dict]) -> None:
         handle.write("\\begin{table*}[t]\n")
         handle.write("  \\centering\n")
         handle.write("  \\scriptsize\n")
-        handle.write("  \\caption{Representative PostgreSQL plan changes caused by corrected statistics. Each row is a query where stale statistics disagree with fresh statistics and OASIS-Proj matches the fresh plan shape.}\n")
+        handle.write("  \\caption{Representative PostgreSQL plan changes caused by corrected statistics. Each row is a query where stale statistics disagree with fresh statistics and OASIS matches the fresh plan shape.}\n")
         handle.write("  \\label{tab:postgres_plan_examples}\n")
         handle.write("  \\setlength{\\tabcolsep}{3pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
@@ -232,7 +232,7 @@ def write_examples_table(path: Path, rows: Sequence[dict]) -> None:
         handle.write("    Family & Predicate & True & Method & Est. rows & Row QE & Root & Plan summary \\\\\n")
         handle.write("    \\midrule\n")
         for row in rows:
-            for method, label in [("stale", "Stale"), ("projected", "OASIS-Proj"), ("fresh", "Fresh")]:
+            for method, label in [("stale", "Stale"), ("projected", "OASIS"), ("fresh", "Fresh")]:
                 handle.write(
                     f"    {family_label(row['family'])} & {row['predicate'].replace('_', '\\_')} & {row['true_rows']} & {label} & "
                     f"{float(row[f'{method}_rows']):.0f} & {float(row[f'{method}_qerr']):.1f} & "
@@ -269,7 +269,7 @@ def write_summary(path: Path, rows: Sequence[dict], examples: Sequence[dict]) ->
     for row in examples:
         lines.append(
             f"- {row['config_id']} {row['query_id']}: "
-            f"stale {row['stale_plan']} -> OASIS-Proj {row['projected_plan']}"
+            f"stale {row['stale_plan']} -> OASIS {row['projected_plan']}"
         )
     path.write_text("\n".join(lines) + "\n")
 

@@ -2,8 +2,8 @@
 \begin{table}[h]
 \centering
 \caption{PostgreSQL planner-only six-configuration subset (left/right/bimodal
-shift $\times$ two seeds, 504 queries). The calibrated router is identical to the
-Hybrid because the residual gate routes to ISOMER and never selects soft.}
+shift $\times$ two seeds, 504 queries). Router is identical to Hybrid because
+the residual gate routes to ISOMER and never selects Soft.}
 \label{tab:stage2-app-pg}
 \setlength{\tabcolsep}{6pt}
 \adjustbox{max width=.98\textwidth}{%
@@ -11,10 +11,10 @@ Hybrid because the residual gate routes to ISOMER and never selects soft.}
 \toprule
 Method & Row QErr & Fresh-plan match & New plan deviations \\
 \midrule
-Hard projection (OASIS-Proj) & 2.237 & 90.9\% & 6.86\% \\
-Conflict-aware soft & 2.277 & 91.1\% & 6.54\% \\
+OASIS & 2.237 & 90.9\% & 6.86\% \\
+Soft & 2.277 & 91.1\% & 6.54\% \\
 Hybrid (no soft) & 2.234 & 90.1\% & 8.17\% \\
-Calibrated router & 2.234 & 90.1\% & 8.17\% \\
+Router & 2.234 & 90.1\% & 8.17\% \\
 \bottomrule
 \end{tabular}
 }

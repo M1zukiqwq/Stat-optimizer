@@ -443,7 +443,7 @@ def _summarize_and_save(results: List[dict], args):
 
     print("\n" + "=" * 120)
     print(f"{'Drift q':>8} | {'Stale':>8} | {'ISOMER':>8} | {'OASIS':>8} | "
-          f"{'OASIS-Proj':>10} | {'Soft':>8} | {'Hybrid':>8} | {'Aggressive':>10} | {'Fresh':>8} | "
+          f"{'OASIS':>10} | {'Soft':>8} | {'Hybrid':>8} | {'Aggressive':>10} | {'Fresh':>8} | "
           f"{'Proj%':>7} | {'Soft%':>7} | {'Aggr%':>7}")
     print("=" * 120)
     summary_rows = []
@@ -526,7 +526,7 @@ def _generate_latex_table(summary_rows, output_dir):
         f.write("  \\caption{OASIS embedded in the FactorJoin bin-based join kernel. "
                 "Join-cardinality Q-error ($\\downarrow$) for a two-table equi-join whose join-key "
                 "distributions drift; only the single-column key histogram consumed by FactorJoin "
-                "varies across methods. The full two-stage OASIS and Hybrid recover most of the "
+                "varies across methods. OASIS and Hybrid recover most of the "
                 "stale-to-fresh join error, whereas OASIS-noProj (the learned stage without "
                 "projection) is actively harmful---it exceeds the stale baseline in this bilinear "
                 "kernel.}\n")

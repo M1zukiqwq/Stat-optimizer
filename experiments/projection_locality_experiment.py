@@ -59,10 +59,10 @@ METHOD_ORDER = [
 
 METHOD_LABELS = {
     "stale": "Stale",
-    "proj_stale": "Proj(stale)/ISOMER",
+    "proj_stale": "ISOMER/ISOMER",
     "oasis_no_proj": "OASIS-noProj",
-    "proj_oasis": "Proj(OASIS)",
-    "proj_fresh": "Proj(fresh)",
+    "proj_oasis": "OASIS",
+    "proj_fresh": "Fresh-init",
     "fresh": "Fresh",
 }
 
@@ -284,13 +284,13 @@ def write_projection_table(output_dir: Path, pivot_rows: Sequence[dict]) -> None
         handle.write("\\begin{table*}[t]\n")
         handle.write("  \\centering\n")
         handle.write("  \\small\n")
-        handle.write("  \\caption{Projection-initialization ablation on held-out future predicates (in-distribution compound drift; geometric-mean selectivity Q-error). The projection operator and feedback constraints are identical across columns; only the marginal that initializes the projection changes. \\textbf{Proj(stale)} initializes from the stale histogram and is exactly ISOMER; \\textbf{Proj(OASIS)} initializes from the learned stage and is the full two-stage OASIS; \\textbf{Proj(fresh)} initializes from the post-drift marginal as a reference upper bound. Win frac is the fraction of held-out predicates on which the full OASIS beats ISOMER.}\n")
+        handle.write("  \\caption{Projection-initialization ablation on held-out future predicates (in-distribution compound drift; geometric-mean selectivity Q-error). The projection operator and feedback constraints are identical across columns; only the marginal that initializes the projection changes. \\textbf{ISOMER} initializes from the stale histogram and is exactly ISOMER; \\textbf{OASIS} initializes from the learned stage and is the OASIS; \\textbf{Fresh-init} initializes from the post-drift marginal as a reference upper bound. Win frac is the fraction of held-out predicates on which the OASIS beats ISOMER.}\n")
         handle.write("  \\label{tab:projection_initialization}\n")
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
         handle.write("  \\begin{tabular}{c | rrrrrr | rr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    $q$ & Stale & Proj(stale) & OASIS-noProj & Proj(OASIS) & Proj(fresh) & Fresh & Proj(OASIS) vs ISOMER & Win frac \\\\\n")
+        handle.write("    $q$ & Stale & ISOMER & OASIS-noProj & OASIS & Fresh-init & Fresh & OASIS vs ISOMER & Win frac \\\\\n")
         handle.write("    \\midrule\n")
         for row in pivot_rows:
             q_label = row["q_mods"]
@@ -331,7 +331,7 @@ def write_locality_table(output_dir: Path, locality_summary: Sequence[dict]) -> 
         handle.write("\\begin{table*}[t]\n")
         handle.write("  \\centering\n")
         handle.write("  \\small\n")
-        handle.write("  \\caption{Feedback-locality diagnostic on the mixed predicate population. Held-out future predicates are binned by the directed Hausdorff distance from their endpoints to the nearest feedback endpoint in fresh-CDF space. Values are geometric-mean selectivity Q-error; ISOMER is projection from a stale start and OASIS is the full two-stage system. OASIS win is the per-predicate fraction on which the full OASIS beats ISOMER.}\n")
+        handle.write("  \\caption{Feedback-locality diagnostic on the mixed predicate population. Held-out future predicates are binned by the directed Hausdorff distance from their endpoints to the nearest feedback endpoint in fresh-CDF space. Values are geometric-mean selectivity Q-error; ISOMER is projection from a stale start and OASIS is the learned prior plus hard projection. OASIS win is the per-predicate fraction on which OASIS beats ISOMER.}\n")
         handle.write("  \\label{tab:feedback_locality}\n")
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
@@ -366,7 +366,7 @@ def write_text_summary(output_dir: Path, pivot_rows: Sequence[dict], locality_su
         "Metric: geometric-mean selectivity Q-error on held-out future predicates.",
         "",
         "Projection initialization ablation:",
-        "q      Stale  ISOMER  OASIS-noProj  Proj(OASIS)  Fresh  ProjVsISOMER  Win",
+        "q      Stale  ISOMER  OASIS-noProj  OASIS  Fresh  OASISVsISOMER  Win",
         "-" * 88,
     ]
     for row in pivot_rows:

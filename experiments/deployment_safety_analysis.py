@@ -157,13 +157,13 @@ def write_latex_table(path: Path, rows: Sequence[dict]) -> None:
         handle.write("\\begin{table*}[t]\n")
         handle.write("  \\centering\n")
         handle.write("  \\small\n")
-        handle.write("  \\caption{Deployment safety checks. Projection and residual-based Hybrid gating are evaluated without oracle/fresh information. P/I/O/S denote OASIS (full two-stage), ISOMER, OASIS-noProj, and stale choices in the residual gate.}\n")
+        handle.write("  \\caption{Deployment safety checks. Projection and residual-based Hybrid gating are evaluated without oracle/fresh information. P/I/O/S denote OASIS, ISOMER, OASIS-noProj, and stale choices in the residual gate.}\n")
         handle.write("  \\label{tab:deployment_safety}\n")
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
         handle.write("  \\begin{tabular}{lllll}\n")
         handle.write("    \\toprule\n")
-        handle.write("    Check & Risk signal & Unguarded state & Calibrated/gated state & Gate signal \\\\\n")
+        handle.write("    Check & Risk signal & Unguarded state & Projected/gated state & Gate signal \\\\\n")
         handle.write("    \\midrule\n")
         for row in rows:
             calibrated = f"{row['guarded']}; {row['secondary']}"
@@ -181,7 +181,7 @@ def write_summary(path: Path, rows: Sequence[dict]) -> None:
     lines = [
         "Deployment safety checks",
         "=" * 32,
-        "P/I/O/S denote OASIS (full two-stage), ISOMER, OASIS-noProj, and stale choices.",
+        "P/I/O/S denote OASIS, ISOMER, OASIS-noProj, and stale choices.",
         "",
     ]
     for row in rows:

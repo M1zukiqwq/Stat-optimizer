@@ -79,9 +79,9 @@ def method_label(method: str) -> str:
     return {
         "stale": "Stale",
         "isomer": "ISOMER",
-        "oasis": "OASIS",
-        "oasis_projected": "OASIS-Proj",
-        "oasis_soft_projection": "OASIS-Soft",
+        "oasis": "OASIS-noProj",
+        "oasis_projected": "OASIS",
+        "oasis_soft_projection": "Soft",
         "hybrid": "Hybrid",
         "aggressive_hybrid": "Aggressive",
         "fresh": "Fresh",
@@ -354,7 +354,7 @@ def write_table(output_dir: Path, summary: Sequence[dict]) -> None:
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
         handle.write("  \\begin{tabular}{lrrrrrrrrr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    Drift family & Stale & ISOMER & OASIS & OASIS-Proj & Soft & Hybrid & Aggressive & Fresh & Hybrid choice \\\\\n")
+        handle.write("    Drift family & Stale & ISOMER & OASIS-noProj & OASIS & Soft & Hybrid & Aggressive & Fresh & Hybrid choice \\\\\n")
         handle.write("    \\midrule\n")
         for pattern in [pattern.value for pattern in PATTERN_ORDER]:
             stale = by_key[(pattern, "stale")]

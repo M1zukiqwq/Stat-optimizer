@@ -1,0 +1,33 @@
+\begin{table}[t]
+\centering
+\caption{TPC-H SF10 DML-drift runtime sanity check (planner-only statistics injection; PostgreSQL 14). Drift is applied with TPC-H refresh-style insert/delete streams; the pretrained OASIS prior is reused without retraining. \emph{Scan Q-error} is the single-column row-estimation error on the drifting date column; \emph{Time vs.\ stale/fresh} is the geometric-mean ratio of warm-cache \texttt{EXPLAIN ANALYZE} execution time; \emph{Regr.} counts queries slower than stale by more than $15\%$ in median time. No method crosses this threshold. On the single query whose plan shape changes under fresh statistics, calibrated statistics recover the fresh plan and cut runtime to $0.60\times$ stale; no runtime-superiority claim is made on the plan-stable queries.}
+\label{tab:tpch_runtime}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llcccc}
+\toprule
+Subset & Method & Scan Q-err & Time vs.\ stale & Time vs.\ fresh & Regr. \\
+\midrule
+All (6 queries) & Stale & 8.166 & 1.000 & 1.065 & 0/6 \\
+ & ISOMER & 1.054 & 0.931 & 0.992 & 0/6 \\
+ & OASIS-noProj & 1.864 & 0.939 & 1.001 & 0/6 \\
+ & OASIS & 1.119 & 0.944 & 1.005 & 0/6 \\
+ & Router & 1.045 & 0.935 & 0.997 & 0/6 \\
+ & Fresh & 1.049 & 0.939 & 1.000 & 0/6 \\
+\midrule
+Plan-change (1) & Stale & 23.030 & 1.000 & 1.557 & 0/1 \\
+ & ISOMER & 1.117 & 0.607 & 0.945 & 0/1 \\
+ & OASIS-noProj & 2.487 & 0.607 & 0.946 & 0/1 \\
+ & OASIS & 1.259 & 0.621 & 0.967 & 0/1 \\
+ & Router & 1.010 & 0.604 & 0.940 & 0/1 \\
+ & Fresh & 1.035 & 0.642 & 1.000 & 0/1 \\
+\midrule
+Plan-stable (5) & Stale & 6.637 & 1.000 & 0.988 & 0/5 \\
+ & ISOMER & 1.042 & 1.014 & 1.002 & 0/5 \\
+ & OASIS-noProj & 1.760 & 1.025 & 1.012 & 0/5 \\
+ & OASIS & 1.093 & 1.026 & 1.013 & 0/5 \\
+ & Router & 1.052 & 1.021 & 1.008 & 0/5 \\
+ & Fresh & 1.052 & 1.013 & 1.000 & 0/5 \\
+\bottomrule
+\end{tabular}
+\end{table}

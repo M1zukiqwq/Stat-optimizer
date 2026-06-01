@@ -9,6 +9,53 @@
   organization={IEEE}
 }
 
+@inproceedings{selinger1979access,
+  title     = {Access Path Selection in a Relational Database Management System},
+  author    = {Selinger, Patricia G. and Astrahan, Morton M. and
+               Chamberlin, Donald D. and Lorie, Raymond A. and Price, Thomas G.},
+  booktitle = {Proceedings of the 1979 ACM SIGMOD International Conference on
+               Management of Data},
+  pages     = {23--34},
+  publisher = {ACM},
+  year      = {1979},
+  doi       = {10.1145/582095.582099}
+}
+
+@inproceedings{chaudhuri1998overview,
+  title     = {An Overview of Query Optimization in Relational Systems},
+  author    = {Chaudhuri, Surajit},
+  booktitle = {Proceedings of the 17th ACM SIGACT-SIGMOD-SIGART Symposium on
+               Principles of Database Systems},
+  pages     = {34--43},
+  publisher = {ACM Press},
+  year      = {1998},
+  doi       = {10.1145/275487.275492}
+}
+
+@misc{postgresqlAnalyze,
+  title        = {{PostgreSQL} Documentation: {ANALYZE}},
+  author       = {{PostgreSQL Global Development Group}},
+  year         = {2026},
+  howpublished = {\url{https://www.postgresql.org/docs/current/sql-analyze.html}},
+  note         = {Accessed 2026-06-01}
+}
+
+@misc{postgresqlPlannerStats,
+  title        = {{PostgreSQL} Documentation: Planner Statistics},
+  author       = {{PostgreSQL Global Development Group}},
+  year         = {2026},
+  howpublished = {\url{https://www.postgresql.org/docs/current/planner-stats.html}},
+  note         = {Accessed 2026-06-01}
+}
+
+@misc{postgresqlRowEstimation,
+  title        = {{PostgreSQL} Documentation: Row Estimation Examples},
+  author       = {{PostgreSQL Global Development Group}},
+  year         = {2026},
+  howpublished = {\url{https://www.postgresql.org/docs/current/row-estimation-examples.html}},
+  note         = {Accessed 2026-06-01}
+}
+
 @article{ivkin2019kll,
   title   = {{KLL}: Approximately optimal streaming quantile estimation},
   author  = {Ivkin, Nikita and Nelson, Jelani and Yu, Huacheng and
@@ -36,33 +83,36 @@
   year      = {1997}
 }
 
-@inproceedings{moerkotte2009preventing,
+@article{moerkotte2009preventing,
   title     = {Preventing bad plans by bounding the impact of cardinality estimation errors},
   author    = {Moerkotte, Guido and Neumann, Thomas and Steidl, Gabriele},
-  booktitle = {Proceedings of the VLDB Endowment},
+  journal   = {Proceedings of the VLDB Endowment},
   volume    = {2},
   number    = {1},
   pages     = {982--993},
   year      = {2009}
 }
 
-@inproceedings{yang2020neurocard,
+@article{yang2020neurocard,
   title     = {{NeuroCard}: One cardinality estimator for all tables},
   author    = {Yang, Zongheng and Kamsetty, Amog and Luan, Sifei and Liang, Eric and
                Duan, Yan and Chen, Xi and Stoica, Ion},
-  booktitle = {Proceedings of the VLDB Endowment},
+  journal   = {Proceedings of the VLDB Endowment},
   volume    = {14},
   number    = {1},
   pages     = {61--73},
   year      = {2020}
 }
 
-@inproceedings{yang2020face,
+@article{yang2020face,
   title     = {{FACE}: A Normalizing Flow based Cardinality Estimator},
-  author    = {Yang, Zongheng and Liang, Eric and Duan, Yan and Luan, Sifei and
-               Stoica, Ion and Hellerstein, Joseph M},
-  booktitle = {SIGMOD Workshop on Approximate Query Processing},
-  year      = {2020}
+  author    = {Wang, Jiayi and Chai, Chengliang and Liu, Jiabin and Li, Guoliang},
+  journal   = {Proceedings of the VLDB Endowment},
+  volume    = {15},
+  number    = {1},
+  pages     = {72--84},
+  year      = {2021},
+  doi       = {10.14778/3485450.3485458}
 }
 
 @article{yang2019deep,
@@ -77,11 +127,11 @@
   year    = {2019}
 }
 
-@inproceedings{hilprecht2019deepdb,
+@article{hilprecht2019deepdb,
   title     = {{DeepDB}: Learn from data, not from queries!},
   author    = {Hilprecht, Benjamin and Schmidt, Andreas and Kulessa, Moritz and
                Molina, Alejandro and Kersting, Kristian and Binnig, Carsten},
-  booktitle = {Proceedings of the VLDB Endowment},
+  journal   = {Proceedings of the VLDB Endowment},
   volume    = {13},
   number    = {7},
   pages     = {992--1005},
@@ -107,12 +157,12 @@
   year      = {2019}
 }
 
-@inproceedings{marcus2019neo,
+@article{marcus2019neo,
   title     = {{Neo}: A learned query optimizer},
   author    = {Marcus, Ryan and Negi, Parimarjan and Mao, Hongzi and Zhang, Chi and
                Alizadeh, Mohammad and Kraska, Tim and Papaemmanouil, Olga and
                Tatbul, Nesime},
-  booktitle = {Proceedings of the VLDB Endowment},
+  journal   = {Proceedings of the VLDB Endowment},
   volume    = {12},
   number    = {11},
   pages     = {1705--1718},
@@ -131,11 +181,18 @@
 @inproceedings{aboulnaga1999self,
   title     = {Self-tuning histograms: Building histograms without looking at data},
   author    = {Aboulnaga, Ashraf and Chaudhuri, Surajit},
-  booktitle = {ACM SIGMOD Record},
-  volume    = {28},
-  number    = {2},
+  booktitle = {Proceedings of SIGMOD},
   pages     = {181--192},
   year      = {1999}
+}
+
+@inproceedings{lim2003sash,
+  title     = {{SASH}: A Self-Adaptive Histogram Set for Dynamically Changing Workloads},
+  author    = {Lim, Lipyeow and Wang, Min and Vitter, Jeffrey Scott},
+  booktitle = {Proceedings of the 29th VLDB Conference},
+  pages     = {369--380},
+  year      = {2003},
+  doi       = {10.1016/B978-012722442-8/50040-9}
 }
 
 @inproceedings{chen1994adaptive,
@@ -146,6 +203,38 @@
   publisher = {ACM Press},
   year      = {1994},
   doi       = {10.1145/191839.191874}
+}
+
+@inproceedings{markl2004progressive,
+  title     = {Robust Query Processing through Progressive Optimization},
+  author    = {Markl, Volker and Raman, Vijayshankar and Simmen, David E. and
+               Lohman, Guy M. and Pirahesh, Hamid},
+  booktitle = {Proceedings of SIGMOD},
+  pages     = {659--670},
+  publisher = {ACM},
+  year      = {2004},
+  doi       = {10.1145/1007568.1007642}
+}
+
+@inproceedings{babcock2005robust,
+  title     = {Towards a Robust Query Optimizer: A Principled and Practical Approach},
+  author    = {Babcock, Brian and Chaudhuri, Surajit},
+  booktitle = {Proceedings of SIGMOD},
+  pages     = {119--130},
+  publisher = {ACM},
+  year      = {2005},
+  doi       = {10.1145/1066157.1066172}
+}
+
+@article{chaudhuri2008paygo,
+  title   = {A Pay-As-You-Go Framework for Query Execution Feedback},
+  author  = {Chaudhuri, Surajit and Narasayya, Vivek R. and Ramamurthy, Ravishankar},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {1},
+  number  = {1},
+  pages   = {1141--1152},
+  year    = {2008},
+  doi     = {10.14778/1453856.1453977}
 }
 
 @inproceedings{stillger2001leo,
@@ -159,18 +248,16 @@
 @inproceedings{kabra1998efficient,
   title     = {Efficient mid-query re-optimization of sub-optimal query execution plans},
   author    = {Kabra, Navin and DeWitt, David J},
-  booktitle = {ACM SIGMOD Record},
-  volume    = {27},
-  number    = {2},
+  booktitle = {Proceedings of SIGMOD},
   pages     = {106--117},
   year      = {1998}
 }
 
-@inproceedings{leis2015good,
+@article{leis2015good,
   title     = {How good are query optimizers, really?},
   author    = {Leis, Viktor and Gubichev, Andrey and Mirchev, Atanas and
                Boncz, Peter and Kemper, Alfons and Neumann, Thomas},
-  booktitle = {Proceedings of the VLDB Endowment},
+  journal   = {Proceedings of the VLDB Endowment},
   volume    = {9},
   number    = {3},
   pages     = {204--215},
@@ -195,15 +282,16 @@
   year        = {1993}
 }
 
-@inproceedings{dutt2021ready,
-  title     = {Are we ready for learned cardinality estimation?},
-  author    = {Dutt, Anshuman and Wang, Chi and Nazi, Azade and Kandula, Srikanth and
-               Narasayya, Vivek and Chaudhuri, Surajit},
-  booktitle = {Proceedings of the VLDB Endowment},
-  volume    = {14},
-  number    = {9},
-  pages     = {1640--1654},
-  year      = {2021}
+@article{wang2021ready,
+  title   = {Are We Ready For Learned Cardinality Estimation?},
+  author  = {Wang, Xiaoying and Qu, Changbo and Wu, Weiyuan and Wang, Jiannan and
+             Zhou, Qingqing},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {14},
+  number  = {9},
+  pages   = {1640--1654},
+  year    = {2021},
+  doi     = {10.14778/3461535.3461552}
 }
 
 @inproceedings{avnur2000eddies,
@@ -223,6 +311,149 @@
   journal = {Proceedings of SIGMOD},
   pages   = {489--504},
   year    = {2018}
+}
+
+@article{zhu2021flat,
+  title   = {{FLAT}: Fast, Lightweight and Accurate Method for Cardinality Estimation},
+  author  = {Zhu, Rong and Wu, Ziniu and Han, Yuxing and Zeng, Kai and
+             Pfadler, Andreas and Qian, Zhengping and Zhou, Jingren and Cui, Bin},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {14},
+  number  = {9},
+  pages   = {1489--1502},
+  year    = {2021},
+  doi     = {10.14778/3461535.3461539}
+}
+
+@article{negi2021flowloss,
+  title   = {Flow-Loss: Learning Cardinality Estimates That Matter},
+  author  = {Negi, Parimarjan and Marcus, Ryan and Kipf, Andreas and Mao, Hongzi and
+             Tatbul, Nesime and Kraska, Tim and Alizadeh, Mohammad},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {14},
+  number  = {11},
+  pages   = {2019--2032},
+  year    = {2021},
+  doi     = {10.14778/3476249.3476259}
+}
+
+@article{sun2021designspace,
+  title   = {Learned Cardinality Estimation: A Design Space Exploration and a
+             Comparative Evaluation},
+  author  = {Sun, Ji and Zhang, Jintao and Sun, Zhaoyan and Li, Guoliang and Tang, Nan},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {15},
+  number  = {1},
+  pages   = {85--97},
+  year    = {2021},
+  doi     = {10.14778/3485450.3485459}
+}
+
+@inproceedings{kim2022learnedstudy,
+  title     = {Learned Cardinality Estimation: An In-depth Study},
+  author    = {Kim, Kyoungmin and Jung, Jisung and Seo, In and Han, Wook-Shin and
+               Choi, Kangwoo and Chong, Jaehyok},
+  booktitle = {Proceedings of SIGMOD},
+  pages     = {1214--1227},
+  publisher = {ACM},
+  year      = {2022},
+  doi       = {10.1145/3514221.3526154}
+}
+
+@article{lu2022pretraining,
+  title   = {Pre-training Summarization Models of Structured Datasets for
+             Cardinality Estimation},
+  author  = {Lu, Yao and Kandula, Srikanth and K{\"o}nig, Arnd Christian and
+             Chaudhuri, Surajit},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {15},
+  number  = {3},
+  pages   = {414--426},
+  year    = {2022},
+  doi     = {10.14778/3494124.3494127}
+}
+
+@inproceedings{li2022warper,
+  title     = {Warper: Efficiently Adapting Learned Cardinality Estimators to Data and
+               Workload Drifts},
+  author    = {Li, Beibin and Lu, Yao and Kandula, Srikanth},
+  booktitle = {Proceedings of SIGMOD},
+  pages     = {2146--2160},
+  publisher = {ACM},
+  year      = {2022},
+  doi       = {10.1145/3514221.3517914}
+}
+
+@article{negi2023robust,
+  title   = {Robust Query Driven Cardinality Estimation under Changing Workloads},
+  author  = {Negi, Parimarjan and Wu, Ziniu and Kipf, Andreas and Tatbul, Nesime and
+             Marcus, Ryan and Madden, Samuel and Kraska, Tim and Alizadeh, Mohammad},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {16},
+  number  = {6},
+  pages   = {1520--1533},
+  year    = {2023},
+  doi     = {10.14778/3583140.3583164}
+}
+
+@article{lee2023impact,
+  title   = {Analyzing the Impact of Cardinality Estimation on Execution Plans in
+             Microsoft {SQL} Server},
+  author  = {Lee, Kukjin and Dutt, Anshuman and Narasayya, Vivek R. and
+             Chaudhuri, Surajit},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {16},
+  number  = {11},
+  pages   = {2871--2883},
+  year    = {2023},
+  doi     = {10.14778/3611479.3611494}
+}
+
+@article{li2023alece,
+  title   = {{ALECE}: An Attention-based Learned Cardinality Estimator for {SPJ}
+             Queries on Dynamic Workloads},
+  author  = {Li, Pengfei and Wei, Wenqing and Zhu, Rong and Ding, Bolin and
+             Zhou, Jingren and Lu, Hua},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {17},
+  number  = {2},
+  pages   = {197--210},
+  year    = {2023},
+  doi     = {10.14778/3626292.3626302}
+}
+
+@article{wang2023ceda,
+  title   = {{CEDA}: Learned Cardinality Estimation with Domain Adaptation},
+  author  = {Wang, Zilong and Zeng, Qixiong and Wang, Ning and Lu, Haowen and
+             Zhang, Yue},
+  journal = {Proceedings of the VLDB Endowment},
+  volume  = {16},
+  number  = {12},
+  pages   = {3934--3937},
+  year    = {2023},
+  doi     = {10.14778/3611540.3611589}
+}
+
+@article{wang2023ldss,
+  title   = {Cardinality Estimation via Learned Dynamic Sample Selection},
+  author  = {Wang, Run-An and Zou, Zhaonian and Jing, Ziqi},
+  journal = {Information Systems},
+  volume  = {117},
+  pages   = {102252},
+  year    = {2023},
+  doi     = {10.1016/j.is.2023.102252}
+}
+
+@inproceedings{han2024bytecard,
+  title     = {{ByteCard}: Enhancing {ByteDance}'s Data Warehouse with Learned
+               Cardinality Estimation},
+  author    = {Han, Yuxing and Wang, Haoyu and Chen, Lixiang and Dong, Yifeng and
+               Chen, Xing and Yu, Benquan and Yang, Chengcheng and Qian, Weining},
+  booktitle = {Companion of the 2024 International Conference on Management of Data},
+  pages     = {41--54},
+  publisher = {ACM},
+  year      = {2024},
+  doi       = {10.1145/3626246.3653376}
 }
 
 @inproceedings{sun2019endtoend,
@@ -254,6 +485,23 @@
   year      = {2001}
 }
 
+@inproceedings{arlitt1996web,
+  title     = {Web Server Workload Characterization: The Search for Invariants},
+  author    = {Arlitt, Martin F. and Williamson, Carey L.},
+  booktitle = {Proceedings of the 1996 ACM SIGMETRICS International Conference on
+               Measurement and Modeling of Computer Systems},
+  pages     = {126--137},
+  year      = {1996},
+  doi       = {10.1145/233013.233034}
+}
+
+@misc{itaNASAHTTP,
+  title        = {{NASA-HTTP}: Two Months of {HTTP} Logs from the {Kennedy Space Center WWW} Server},
+  author       = {{Internet Traffic Archive}},
+  howpublished = {\url{https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html}},
+  note         = {Accessed 2026-06-01}
+}
+
 @article{markl2007consistent,
   title   = {Consistent selectivity estimation via maximum entropy},
   author  = {Markl, Volker and Megiddo, Nimrod and Kutsch, Marcel and
@@ -273,12 +521,12 @@
   year      = {2020}
 }
 
-@inproceedings{han2021cardinality,
+@article{han2021cardinality,
   title     = {Cardinality estimation in {DBMS}: A comprehensive benchmark evaluation},
   author    = {Han, Yuxing and Wu, Ziniu and Wu, Peizhi and Zhu, Rong and
                Yang, Jingyi and Tan, Liang Wei and Zeng, Kai and Cai, Gao and
                Zhang, Yao and Li, Guoliang},
-  booktitle = {Proceedings of the VLDB Endowment},
+  journal   = {Proceedings of the VLDB Endowment},
   volume    = {15},
   number    = {4},
   pages     = {752--765},

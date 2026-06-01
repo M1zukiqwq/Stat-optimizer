@@ -10,9 +10,9 @@ single-column marginals as a swappable input, and that the joint-selectivity
 gain does not depend on any single dependence model. This supports two claims:
 
   (1) Seamless compatibility: across Independence, IPF/Sinkhorn-2D, and the
-      Gaussian / Clayton / Gumbel / Frank copulas, swapping in OASIS-Proj
+      Gaussian / Clayton / Gumbel / Frank copulas, swapping in OASIS
       marginals beats stale marginals and approaches fresh marginals.
-  (2) The "plain OASIS needs feedback-consistency projection" finding is
+  (2) The "OASIS-noProj needs feedback-consistency projection" finding is
       universal across composition methods, not specific to one estimator.
 
 Honesty boundary
@@ -348,7 +348,7 @@ def run_experiment(args):
                         })
                     col_observations.append(obs_list)
 
-                # ── Marginal repair: OASIS, ISOMER, OASIS-Proj, Hybrid ──
+                # ── Marginal repair: OASIS, ISOMER, OASIS, Hybrid ──
                 oasis_bounds, isomer_bounds, oasis_projected_bounds, oasis_soft_bounds = [], [], [], []
                 for c in range(2):
                     oasis_bounds.append(correct_marginal_with_oasis(
@@ -513,7 +513,7 @@ def _summarize_and_save(results: List[dict], args):
     summary_rows = []
     print("\n" + "=" * 126)
     print(f"{'Estimator':>16} | {'Stale':>8} | {'ISOMER':>8} | {'OASIS':>8} | "
-          f"{'OASIS-Proj':>10} | {'Soft':>8} | {'Hybrid':>8} | {'Aggressive':>10} | {'Fresh':>8} | "
+          f"{'OASIS':>10} | {'Soft':>8} | {'Hybrid':>8} | {'Aggressive':>10} | {'Fresh':>8} | "
           f"{'Proj%':>7} | {'Soft%':>7} | {'Aggr%':>7}")
     print("=" * 126)
     for estimator in args.estimators:
@@ -569,7 +569,7 @@ def _generate_latex_table(summary_rows, output_dir):
         f.write("  \\caption{OASIS as a drop-in marginal upgrade across a family of "
                 "composition estimators. Average joint Q-error ($\\downarrow$) for two-column "
                 "range predicates; dependence structure is held fixed per estimator and only the "
-                "marginal input varies. The full two-stage OASIS and Hybrid improve every "
+                "marginal input varies. OASIS and Hybrid improve every "
                 "estimator, whereas OASIS-noProj (the learned stage without the feedback-consistency "
                 "projection) is weak and unstable, confirming the projection is required across "
                 "composition methods.}\n")

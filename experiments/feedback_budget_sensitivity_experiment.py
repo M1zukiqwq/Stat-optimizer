@@ -159,8 +159,8 @@ def method_label(method: str) -> str:
     return {
         "stale": "Stale",
         "isomer": "ISOMER",
-        "oasis": "OASIS",
-        "oasis_projected": "OASIS-Proj",
+        "oasis": "OASIS-noProj",
+        "oasis_projected": "OASIS",
         "hybrid": "Hybrid",
         "aggressive_hybrid": "Aggressive",
         "fresh": "Fresh",
@@ -180,7 +180,7 @@ def write_latex_table(output_dir: Path, summary: Sequence[dict], hybrid_choices:
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
         handle.write("  \\begin{tabular}{crrrrrrrrrr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    $K$ & Stale QE & ISOMER QE & OASIS QE & Proj QE & Hybrid QE & Aggressive QE & OASIS JoinOpt & Proj JoinOpt & Hybrid JoinOpt & Hybrid choice \\\\\n")
+        handle.write("    $K$ & Stale QE & ISOMER QE & OASIS-noProj QE & OASIS QE & Hybrid QE & Aggressive QE & OASIS-noProj JoinOpt & OASIS JoinOpt & Hybrid JoinOpt & Hybrid choice \\\\\n")
         handle.write("    \\midrule\n")
         for feedback_k in sorted(hybrid_choices):
             stale = by_key[(feedback_k, "stale")]

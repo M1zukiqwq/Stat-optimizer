@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\caption{TPC-H SF10 DML-drift study, aggregated over three independent refresh-stream seeds (mean\,$\pm$\,std; six curated date-sensitive queries each; planner-only statistics injection, PostgreSQL~14). The pretrained OASIS prior is reused with no TPC-H retraining. \emph{Scan Q-err} is the row-estimation error on the drifting date column. \emph{Time/Fresh} and \emph{Time/Stale} are geometric-mean ratios of warm-cache \texttt{EXPLAIN ANALYZE} execution time to the fresh- and stale-statistics runs. Calibrated statistics (OASIS, Router) match fresh statistics on both accuracy and runtime (Time/Fresh $\approx 1$). The stale wall-clock baseline is not a reliable target: a stale mis-estimate can pick a coincidentally cheaper-to-run plan (Time/Stale $>1$ here), whereas in other configurations it picks a much slower one; we therefore make no runtime-superiority claim and report that OASIS reproduces fresh-statistics behavior.}
+\label{tab:tpch_runtime}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lccc}
+\toprule
+Method & Scan Q-err & Time/Fresh & Time/Stale \\
+\midrule
+Stale & 5.23\,$\pm$\,0.24 & 0.65\,$\pm$\,0.07 & 1.00\,$\pm$\,0.00 \\
+ISOMER & 2.02\,$\pm$\,0.08 & 0.98\,$\pm$\,0.07 & 1.51\,$\pm$\,0.07 \\
+OASIS-noProj & 2.66\,$\pm$\,0.07 & 1.02\,$\pm$\,0.02 & 1.59\,$\pm$\,0.18 \\
+OASIS & 2.02\,$\pm$\,0.10 & 0.96\,$\pm$\,0.04 & 1.49\,$\pm$\,0.11 \\
+Router & 2.01\,$\pm$\,0.10 & 1.01\,$\pm$\,0.02 & 1.57\,$\pm$\,0.15 \\
+Fresh & 2.01\,$\pm$\,0.07 & 1.00\,$\pm$\,0.00 & 1.56\,$\pm$\,0.17 \\
+\bottomrule
+\end{tabular}
+\end{table}

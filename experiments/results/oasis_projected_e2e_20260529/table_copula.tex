@@ -1,12 +1,12 @@
 \begin{table}[t]
   \centering
   \small
-  \caption{Joint selectivity estimation with different single-column marginal inputs. Q-Error ($\downarrow$) for 2-column range predicates at varying correlations and drift. OASIS-Proj starts from OASIS marginals and projects them onto feedback constraints. Hybrid chooses a per-column correction using feedback-window residuals. Independence is the maximum-entropy estimator using only marginals; Gaussian copula adds a fixed dependence structure.}
+  \caption{Joint selectivity estimation with different single-column marginal inputs. Q-Error ($\downarrow$) for 2-column range predicates at varying correlations and drift. OASIS starts from OASIS-noProj marginals and projects them onto feedback constraints. Hybrid chooses a per-column correction using feedback-window residuals. Independence is the maximum-entropy estimator using only marginals; Gaussian copula adds a fixed dependence structure.}
   \label{tab:copula}
   \setlength{\tabcolsep}{3pt}
   \begin{tabular}{lcc | rrrrrr | rrr}
     \toprule
-    Estimator & $\rho$ & $q$ & Stale & ISOMER & OASIS & OASIS-Proj & Hybrid & Fresh & OASIS Imp & Proj Imp & Hybrid Imp \\
+    Estimator & $\rho$ & $q$ & Stale & ISOMER & OASIS-noProj & OASIS & Hybrid & Fresh & OASIS-noProj Imp & OASIS Imp & Hybrid Imp \\
     \midrule
     Copula & 0.0 & 1 & 1.259 & 1.115 & 1.295 & 1.121 & \textbf{1.114} & 1.107 & -3\% & +11\% & +12\% \\
     Copula & 0.0 & 5 & 1.595 & 1.114 & 1.479 & 1.111 & \textbf{1.098} & 1.069 & +7\% & +30\% & +31\% \\

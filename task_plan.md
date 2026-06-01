@@ -32,6 +32,9 @@ Goal: understand the Stat-optimizer project, survey algorithms that estimate mul
 | 24. Full Stage-1 estimator swap | complete | Ran the formal cached prior-source swap over 1024 cases (8 q values × 128 cases/q) with progress reporting; results are in `experiments/results/stage1_estimator_swap_20260531`. |
 | 25. Pre-rewrite backup and GitHub checkpoint | complete | Backed up `paper/` to `backups/paper_pre_stage2_rewrite_20260531_232346/paper/`, committed `56601cd`, pushed to `origin/main`, and confirmed a clean worktree before rewriting. |
 | 26. Stage-2-centric paper rewrite | complete | Reframed the manuscript around regime-aware Stage-2 feedback calibration, synced supplementary materials and generated tables, compiled both PDFs, and prepared the rewrite for the final GitHub push. |
+| 27. Main-paper concision pass | complete | Used an independent sub-agent review to guide a second slimming pass. Main paper is now 26 pages / ~6111 words: Stage-1-heavy tables and secondary figures moved to the supplement, Stage-2 core evidence retained in the main text. |
+| 28. Public production-trace case study | complete | Added a public NASA HTTP production-telemetry trace experiment, ran the 288-case formal protocol with progress reporting, and integrated the result without claiming access to private DB workload logs. |
+| 29. Reviewer-score assessment | complete | Assessed only `paper/main_is.tex` per user clarification; VLDB likely weak reject/borderline, Information Systems likely major revision with a plausible acceptance path. |
 
 ## Decisions
 

@@ -187,7 +187,11 @@ non-null mass. Therefore the invariant is preserved.
 \subsection{Approximate Idempotence}
 
 \begin{definition}[Approximate Idempotence]
-Let $(\mathcal{M}', \mathcal{H}') = \mathrm{Decompose}(\mathrm{Reconstruct}(\mathcal{M}, \mathcal{H}), \tau, K)$. The conversion interface is $\epsilon$-idempotent if the round trip preserves total non-null mass within $\epsilon$ and preserves the residual quantile function within $\epsilon$ over a fixed evaluation grid.
+Let
+\[
+  (\mathcal{M}', \mathcal{H}') = \mathrm{Decompose}(\mathrm{Reconstruct}(\mathcal{M}, \mathcal{H}), \tau, K).
+\]
+The conversion interface is $\epsilon$-idempotent if the round trip preserves total non-null mass within $\epsilon$ and preserves the residual quantile function within $\epsilon$ over a fixed evaluation grid.
 \end{definition}
 
 Perfect idempotence need not hold under thresholded decomposition because:
@@ -231,10 +235,10 @@ class PostgreSQLStatisticsAdapter:
 \end{lstlisting}
 
 The full reference interface is available in
-\texttt{appendix/mcv\_adapter\_interface.py}. This appendix is the
+\texttt{appendix/\allowbreak mcv\_\allowbreak adapter\_\allowbreak interface.py}. This appendix is the
 supplementary counterpart of the compact PostgreSQL-style adapter discussion in
 the main text and is intended to be kept numerically consistent with
-\texttt{experiments/results/mcv\_validation\_results.json}.
+\texttt{experiments/\allowbreak results/\allowbreak mcv\_\allowbreak validation\_\allowbreak results.json}.
 
 \subsection{Performance Considerations}
 

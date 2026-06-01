@@ -1,0 +1,254 @@
+{
+  "config_id": "expA_left_shift",
+  "drift_family": "left_shift",
+  "rows": 1500000,
+  "timing_runs": 7,
+  "hybrid_choice": "isomer",
+  "n_plan_change_queries": 54,
+  "n_queries": 84,
+  "summary": [
+    {
+      "subset": "all",
+      "method": "stale",
+      "n_queries": 84,
+      "total_median_ms": 9894.848,
+      "geomean_ratio_vs_stale": 1.0,
+      "geomean_ratio_vs_fresh": 1.1336,
+      "n_regressions_gt15pct_vs_stale": 0
+    },
+    {
+      "subset": "all",
+      "method": "isomer",
+      "n_queries": 84,
+      "total_median_ms": 11466.995,
+      "geomean_ratio_vs_stale": 1.019,
+      "geomean_ratio_vs_fresh": 1.1552,
+      "n_regressions_gt15pct_vs_stale": 29
+    },
+    {
+      "subset": "all",
+      "method": "oasis",
+      "n_queries": 84,
+      "total_median_ms": 9721.526,
+      "geomean_ratio_vs_stale": 0.8851,
+      "geomean_ratio_vs_fresh": 1.0033,
+      "n_regressions_gt15pct_vs_stale": 22
+    },
+    {
+      "subset": "all",
+      "method": "oasis_projected",
+      "n_queries": 84,
+      "total_median_ms": 13136.655,
+      "geomean_ratio_vs_stale": 1.0849,
+      "geomean_ratio_vs_fresh": 1.2299,
+      "n_regressions_gt15pct_vs_stale": 33
+    },
+    {
+      "subset": "all",
+      "method": "oasis_soft_projection",
+      "n_queries": 84,
+      "total_median_ms": 10738.987,
+      "geomean_ratio_vs_stale": 1.0063,
+      "geomean_ratio_vs_fresh": 1.1407,
+      "n_regressions_gt15pct_vs_stale": 30
+    },
+    {
+      "subset": "all",
+      "method": "hybrid",
+      "n_queries": 84,
+      "total_median_ms": 10176.202,
+      "geomean_ratio_vs_stale": 0.9466,
+      "geomean_ratio_vs_fresh": 1.0731,
+      "n_regressions_gt15pct_vs_stale": 21
+    },
+    {
+      "subset": "all",
+      "method": "aggressive_hybrid",
+      "n_queries": 84,
+      "total_median_ms": 9986.373,
+      "geomean_ratio_vs_stale": 0.95,
+      "geomean_ratio_vs_fresh": 1.077,
+      "n_regressions_gt15pct_vs_stale": 23
+    },
+    {
+      "subset": "all",
+      "method": "calibrated_hybrid",
+      "n_queries": 84,
+      "total_median_ms": 10102.912,
+      "geomean_ratio_vs_stale": 0.9598,
+      "geomean_ratio_vs_fresh": 1.088,
+      "n_regressions_gt15pct_vs_stale": 24
+    },
+    {
+      "subset": "all",
+      "method": "fresh",
+      "n_queries": 84,
+      "total_median_ms": 10158.23,
+      "geomean_ratio_vs_stale": 0.8821,
+      "geomean_ratio_vs_fresh": 1.0,
+      "n_regressions_gt15pct_vs_stale": 22
+    },
+    {
+      "subset": "plan_change",
+      "method": "stale",
+      "n_queries": 54,
+      "total_median_ms": 8011.525,
+      "geomean_ratio_vs_stale": 1.0,
+      "geomean_ratio_vs_fresh": 1.2064,
+      "n_regressions_gt15pct_vs_stale": 0
+    },
+    {
+      "subset": "plan_change",
+      "method": "isomer",
+      "n_queries": 54,
+      "total_median_ms": 9349.199,
+      "geomean_ratio_vs_stale": 1.0059,
+      "geomean_ratio_vs_fresh": 1.2135,
+      "n_regressions_gt15pct_vs_stale": 23
+    },
+    {
+      "subset": "plan_change",
+      "method": "oasis",
+      "n_queries": 54,
+      "total_median_ms": 8002.643,
+      "geomean_ratio_vs_stale": 0.8587,
+      "geomean_ratio_vs_fresh": 1.0359,
+      "n_regressions_gt15pct_vs_stale": 17
+    },
+    {
+      "subset": "plan_change",
+      "method": "oasis_projected",
+      "n_queries": 54,
+      "total_median_ms": 9987.271,
+      "geomean_ratio_vs_stale": 1.0411,
+      "geomean_ratio_vs_fresh": 1.2559,
+      "n_regressions_gt15pct_vs_stale": 23
+    },
+    {
+      "subset": "plan_change",
+      "method": "oasis_soft_projection",
+      "n_queries": 54,
+      "total_median_ms": 8744.239,
+      "geomean_ratio_vs_stale": 0.9846,
+      "geomean_ratio_vs_fresh": 1.1878,
+      "n_regressions_gt15pct_vs_stale": 22
+    },
+    {
+      "subset": "plan_change",
+      "method": "hybrid",
+      "n_queries": 54,
+      "total_median_ms": 8306.812,
+      "geomean_ratio_vs_stale": 0.9277,
+      "geomean_ratio_vs_fresh": 1.1192,
+      "n_regressions_gt15pct_vs_stale": 21
+    },
+    {
+      "subset": "plan_change",
+      "method": "aggressive_hybrid",
+      "n_queries": 54,
+      "total_median_ms": 8114.756,
+      "geomean_ratio_vs_stale": 0.9311,
+      "geomean_ratio_vs_fresh": 1.1232,
+      "n_regressions_gt15pct_vs_stale": 23
+    },
+    {
+      "subset": "plan_change",
+      "method": "calibrated_hybrid",
+      "n_queries": 54,
+      "total_median_ms": 8218.8,
+      "geomean_ratio_vs_stale": 0.9373,
+      "geomean_ratio_vs_fresh": 1.1307,
+      "n_regressions_gt15pct_vs_stale": 23
+    },
+    {
+      "subset": "plan_change",
+      "method": "fresh",
+      "n_queries": 54,
+      "total_median_ms": 8268.787,
+      "geomean_ratio_vs_stale": 0.8289,
+      "geomean_ratio_vs_fresh": 1.0,
+      "n_regressions_gt15pct_vs_stale": 22
+    },
+    {
+      "subset": "plan_stable",
+      "method": "stale",
+      "n_queries": 30,
+      "total_median_ms": 1883.323,
+      "geomean_ratio_vs_stale": 1.0,
+      "geomean_ratio_vs_fresh": 1.0135,
+      "n_regressions_gt15pct_vs_stale": 0
+    },
+    {
+      "subset": "plan_stable",
+      "method": "isomer",
+      "n_queries": 30,
+      "total_median_ms": 2117.796,
+      "geomean_ratio_vs_stale": 1.0431,
+      "geomean_ratio_vs_fresh": 1.0572,
+      "n_regressions_gt15pct_vs_stale": 6
+    },
+    {
+      "subset": "plan_stable",
+      "method": "oasis",
+      "n_queries": 30,
+      "total_median_ms": 1718.883,
+      "geomean_ratio_vs_stale": 0.9347,
+      "geomean_ratio_vs_fresh": 0.9473,
+      "n_regressions_gt15pct_vs_stale": 5
+    },
+    {
+      "subset": "plan_stable",
+      "method": "oasis_projected",
+      "n_queries": 30,
+      "total_median_ms": 3149.384,
+      "geomean_ratio_vs_stale": 1.1686,
+      "geomean_ratio_vs_fresh": 1.1844,
+      "n_regressions_gt15pct_vs_stale": 10
+    },
+    {
+      "subset": "plan_stable",
+      "method": "oasis_soft_projection",
+      "n_queries": 30,
+      "total_median_ms": 1994.748,
+      "geomean_ratio_vs_stale": 1.0464,
+      "geomean_ratio_vs_fresh": 1.0605,
+      "n_regressions_gt15pct_vs_stale": 8
+    },
+    {
+      "subset": "plan_stable",
+      "method": "hybrid",
+      "n_queries": 30,
+      "total_median_ms": 1869.39,
+      "geomean_ratio_vs_stale": 0.9816,
+      "geomean_ratio_vs_fresh": 0.9948,
+      "n_regressions_gt15pct_vs_stale": 0
+    },
+    {
+      "subset": "plan_stable",
+      "method": "aggressive_hybrid",
+      "n_queries": 30,
+      "total_median_ms": 1871.617,
+      "geomean_ratio_vs_stale": 0.9852,
+      "geomean_ratio_vs_fresh": 0.9985,
+      "n_regressions_gt15pct_vs_stale": 0
+    },
+    {
+      "subset": "plan_stable",
+      "method": "calibrated_hybrid",
+      "n_queries": 30,
+      "total_median_ms": 1884.112,
+      "geomean_ratio_vs_stale": 1.0018,
+      "geomean_ratio_vs_fresh": 1.0153,
+      "n_regressions_gt15pct_vs_stale": 1
+    },
+    {
+      "subset": "plan_stable",
+      "method": "fresh",
+      "n_queries": 30,
+      "total_median_ms": 1889.443,
+      "geomean_ratio_vs_stale": 0.9867,
+      "geomean_ratio_vs_fresh": 1.0,
+      "n_regressions_gt15pct_vs_stale": 0
+    }
+  ]
+}

@@ -2,9 +2,9 @@
 \begin{table}[t]
   \centering
   \caption{Stage-2 calibration variants on held-out future predicates (cached
-  drift, fixed OASIS checkpoint). Lower is better. Full-window soft has the lowest
+  drift, fixed OASIS checkpoint). Lower is better. Soft (full) has the lowest
   selectivity Q-error and feedback residual but is unsafe under sequential drift
-  (Section~\ref{sec:ood-drift-realism}); the calibrated router is the best
+  (Section~\ref{sec:ood-drift-realism}); Router is the best
   \emph{deployable} variant, recovering most of the single-column gain over hard
   projection while remaining safe to route.}
   \label{tab:stage2_calibration}
@@ -14,12 +14,12 @@
     \toprule
     Stage-2 variant & Sel. QErr & Feedback resid. & Quantile MAE & Join regret \\
     \midrule
-    Hard projection (OASIS-Proj) & 1.442 & 0.0440 & 0.0519 & 1.0344 \\
-    Full-window soft & 1.376 & 0.0348 & 0.0483 & 1.0284 \\
-    Recent-window soft ($k{=}8$) & 1.408 & 0.0404 & 0.0471 & 1.0322 \\
-    Conflict-aware soft & 1.401 & 0.0392 & 0.0473 & 1.0313 \\
+    OASIS & 1.442 & 0.0440 & 0.0519 & 1.0344 \\
+    Soft (full) & 1.376 & 0.0348 & 0.0483 & 1.0284 \\
+    Soft (recent $k{=}8$) & 1.408 & 0.0404 & 0.0471 & 1.0322 \\
+    Soft & 1.401 & 0.0392 & 0.0473 & 1.0313 \\
     Hybrid (no soft) & 1.429 & 0.0395 & 0.0513 & 1.0326 \\
-    \textbf{Calibrated router} & 1.395 & 0.0358 & 0.0486 & 1.0302 \\
+    \textbf{Router} & 1.395 & 0.0358 & 0.0486 & 1.0302 \\
     \bottomrule
   \end{tabular}
   }

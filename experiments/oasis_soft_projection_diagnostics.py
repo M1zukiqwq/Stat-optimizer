@@ -8,7 +8,7 @@ and emits per-case features that explain *when* soft projection helps or hurts:
 
   - hard active suffix length (ISOMER's implicit stale-constraint filter);
   - per-observation conflict against the most recent trusted feedback;
-  - count of consistent old observations (kept by conflict-aware soft but
+  - count of consistent old observations (kept by Soft but
     discarded by a fixed recent window);
   - signed feedback residual split by observation age;
   - KL movement from the OASIS-noProj prior for each variant;

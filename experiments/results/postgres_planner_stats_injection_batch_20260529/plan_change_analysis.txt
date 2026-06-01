@@ -6,6 +6,6 @@ Join: changed=215/336, FreshPlan=92.3%, Recovery=90.7%, NewDev=5.0%
 Join + dimension filter: changed=134/336, FreshPlan=97.6%, Recovery=94.0%, NewDev=0.0%
 
 Examples:
-- right_shift_rows100000_seed20260529 join_dim_filter:le_0.045: stale Nested Loop: Nested Loop:Inner; Bitmap Heap Scan:dim; Bitmap Index Scan:dim_payload_idx; Index Scan:fact:fact_dim_idx -> OASIS-Proj Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx; Bitmap Heap Scan:dim; Bitmap Index Scan:dim_payload_idx
-- right_shift_rows100000_seed20260531 scan:le_0.045: stale Seq Scan: Seq Scan:fact -> OASIS-Proj Bitmap Heap Scan: Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx
-- left_shift_rows200000_seed20260531 join:bt_0.13_0.2: stale Nested Loop: Nested Loop:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx; Index Scan:dim:dim_pkey -> OASIS-Proj Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx; Seq Scan:dim
+- right_shift_rows100000_seed20260529 join_dim_filter:le_0.045: stale Nested Loop: Nested Loop:Inner; Bitmap Heap Scan:dim; Bitmap Index Scan:dim_payload_idx; Index Scan:fact:fact_dim_idx -> OASIS Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx; Bitmap Heap Scan:dim; Bitmap Index Scan:dim_payload_idx
+- right_shift_rows100000_seed20260531 scan:le_0.045: stale Seq Scan: Seq Scan:fact -> OASIS Bitmap Heap Scan: Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx
+- left_shift_rows200000_seed20260531 join:bt_0.13_0.2: stale Nested Loop: Nested Loop:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx; Index Scan:dim:dim_pkey -> OASIS Hash Join: Hash Join:Inner; Bitmap Heap Scan:fact; Bitmap Index Scan:fact_x_idx; Seq Scan:dim

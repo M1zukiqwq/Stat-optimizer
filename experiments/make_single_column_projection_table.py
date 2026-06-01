@@ -4,7 +4,7 @@
 Reuses the synthetic-suite cached model + compound-drift test data and the suite's
 own metric functions, so the Stale/ISOMER/OASIS-noProj columns reproduce the
 paper's main single-column numbers exactly (verified against main/summary.csv).
-It then adds the full two-stage OASIS column (Stage-1 prediction followed by the
+It then adds the OASIS column (Stage-1 prediction followed by the
 ISOMER/IPF-style feedback-consistency projection) to show that the deployed form
 keeps a single-column advantage over ISOMER while the projection costs only a
 small amount of peak accuracy relative to OASIS-noProj.
@@ -69,9 +69,9 @@ def main() -> None:
     red = lambda s, v: (s - v) / s * 100
     with open(OUT / "table_single_column_projection.tex", "w") as f:
         f.write("\\begin{table}[t]\n  \\centering\n  \\small\n")
-        f.write("  \\caption{Single-column selectivity Q-error ($\\downarrow$) of the full two-stage "
-                "OASIS versus the OASIS-noProj ablation, on in-distribution compound drift. The full "
-                "system stays below ISOMER at every drift level, so the deployed (projected) form keeps "
+        f.write("  \\caption{Single-column selectivity Q-error ($\\downarrow$) of OASIS "
+                "versus the OASIS-noProj ablation, on in-distribution compound drift. OASIS "
+                "stays below ISOMER at every drift level, so the deployed hard-projected form keeps "
                 "a learned single-column advantage; the projection costs only a small amount relative to "
                 "the stage-1 ablation, the price paid for the downstream composition and join safety "
                 "shown in Tables~\\ref{tab:marginal_joint}, \\ref{tab:composition_family} and "

@@ -728,8 +728,8 @@ def run_experiment(args):
         by_config[key].append(r)
 
     print("\n" + "=" * 132)
-    print(f"{'Estimator':>16} | {'ρ':>5} | {'q':>3} | {'Stale QE':>10} | {'ISOMER QE':>10} | {'OASIS QE':>10} | {'Proj QE':>10} | {'Hybrid QE':>10} | {'Fresh QE':>10} | "
-          f"{'OASIS Imp%':>10} | {'Hybrid Imp%':>11} | {'Corr':>6} | N")
+    print(f"{'Estimator':>16} | {'ρ':>5} | {'q':>3} | {'Stale QE':>10} | {'ISOMER QE':>10} | {'OASIS-noProj QE':>15} | {'OASIS QE':>10} | {'Hybrid QE':>10} | {'Fresh QE':>10} | "
+          f"{'OASIS-noProj Imp%':>17} | {'Hybrid Imp%':>11} | {'Corr':>6} | N")
     print("=" * 132)
 
     summary_rows = []
@@ -819,14 +819,14 @@ def generate_latex_table(by_config, output_dir):
         f.write("  \\small\n")
         f.write("  \\caption{Joint selectivity estimation with different single-column marginal inputs. "
                 "Q-Error ($\\downarrow$) for 2-column range predicates at varying correlations and drift. "
-                "OASIS-Proj starts from OASIS marginals and projects them onto feedback constraints. "
+                "OASIS starts from OASIS-noProj marginals and projects them onto feedback constraints. "
                 "Hybrid chooses a per-column correction using feedback-window residuals. "
                 "Independence is the maximum-entropy estimator using only marginals; Gaussian copula adds a fixed dependence structure.}\n")
         f.write("  \\label{tab:copula}\n")
         f.write("  \\setlength{\\tabcolsep}{3pt}\n")
         f.write("  \\begin{tabular}{lcc | rrrrrr | rrr}\n")
         f.write("    \\toprule\n")
-        f.write("    Estimator & $\\rho$ & $q$ & Stale & ISOMER & OASIS & OASIS-Proj & Hybrid & Fresh & OASIS Imp & Proj Imp & Hybrid Imp \\\\\n")
+        f.write("    Estimator & $\\rho$ & $q$ & Stale & ISOMER & OASIS-noProj & OASIS & Hybrid & Fresh & OASIS-noProj Imp & OASIS Imp & Hybrid Imp \\\\\n")
         f.write("    \\midrule\n")
 
         for key in sorted(by_config.keys()):

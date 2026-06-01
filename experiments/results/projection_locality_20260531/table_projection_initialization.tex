@@ -1,13 +1,13 @@
 \begin{table*}[t]
   \centering
   \small
-  \caption{Projection-initialization ablation on held-out future predicates (in-distribution compound drift; geometric-mean selectivity Q-error). The projection operator and feedback constraints are identical across columns; only the marginal that initializes the projection changes. \textbf{Proj(stale)} initializes from the stale histogram and is exactly ISOMER; \textbf{Proj(OASIS)} initializes from the learned stage and is the full two-stage OASIS; \textbf{Proj(fresh)} initializes from the post-drift marginal as a reference upper bound. Win frac is the fraction of held-out predicates on which the full OASIS beats ISOMER.}
+  \caption{Projection-initialization ablation on held-out future predicates (in-distribution compound drift; geometric-mean selectivity Q-error). The projection operator and feedback constraints are identical across columns; only the marginal that initializes the projection changes. \textbf{ISOMER} initializes hard projection from the stale histogram; \textbf{OASIS} initializes hard projection from OASIS-noProj; \textbf{Fresh-init} initializes from the post-drift marginal as a reference upper bound. Win frac is the fraction of held-out predicates on which OASIS beats ISOMER.}
   \label{tab:projection_initialization}
   \setlength{\tabcolsep}{4pt}
   \resizebox{\textwidth}{!}{%
   \begin{tabular}{c | rrrrrr | rr}
     \toprule
-    $q$ & Stale & Proj(stale) & OASIS-noProj & Proj(OASIS) & Proj(fresh) & Fresh & Proj(OASIS) vs ISOMER & Win frac \\
+    $q$ & Stale & ISOMER & OASIS-noProj & OASIS & Fresh-init & Fresh & OASIS vs ISOMER & Win frac \\
     \midrule
     1 & 1.224 & 1.137 & 1.271 & 1.181 & 1.104 & 1.000 & -3.9\% & 43.3\% \\
     3 & 1.679 & 1.298 & 1.370 & 1.283 & 1.146 & 1.000 & +1.2\% & 53.5\% \\

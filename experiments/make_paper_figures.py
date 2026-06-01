@@ -22,8 +22,8 @@ from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = ROOT / "paper" / "figures"
 
-# Naming: OASIS = full two-stage system (learned repair + feedback-consistency
-# projection); OASIS-noProj = stage-1-only ablation (the raw learned marginal).
+# Naming: OASIS = learned repair + feedback-consistency projection;
+# OASIS-noProj = stage-1-only ablation (the raw learned marginal).
 COLORS = {
     "Stale": "#666666",
     "Prior": "#666666",
@@ -32,7 +32,6 @@ COLORS = {
     "ISOMER": "#0072B2",
     "OASIS-noProj": "#E69F00",
     "OASIS": "#D55E00",
-    "OASIS-Proj": "#D55E00",
     "Hybrid": "#CC79A7",
     "Fresh": "#000000",
 }
@@ -45,7 +44,6 @@ MARKERS = {
     "ISOMER": "D",
     "OASIS-noProj": "P",
     "OASIS": "X",
-    "OASIS-Proj": "X",
     "Hybrid": "v",
 }
 

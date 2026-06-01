@@ -3,7 +3,7 @@
 
 This script intentionally reuses cached paper-suite data and model checkpoints.
 It does not retrain OASIS or rerun any full experiment. The smoke compares the
-deployed full OASIS projection against lower-IPF-iteration projection variants,
+deployed OASIS projection against lower-IPF-iteration projection variants,
 while reporting both accuracy and feedback-consistency residuals.
 """
 from __future__ import annotations
@@ -174,7 +174,7 @@ def write_outputs(output_dir: Path, rows: Sequence[dict], summary: Sequence[dict
         "=" * 48,
         "Pass rule: a fast projection variant should reduce total per-case time",
         "by the requested threshold while keeping Q-error and feedback residual",
-        "within the requested relative tolerances against baseline full OASIS.",
+        "within the requested relative tolerances against baseline OASIS.",
         "",
         "Method                 n   QE(gm)  FeedMean  FeedMax  Stage1ms  Projms  Totalms  QEImp",
         "-" * 92,

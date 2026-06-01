@@ -35,7 +35,7 @@ MARKERS = {
     "Hybrid": "v",
 }
 # (column suffix in CSV, legend label) in plotting order.
-# Naming: OASIS = full two-stage system (learned repair + projection);
+# Naming: OASIS = learned repair + feedback-consistency projection;
 # the stage-1-only ablation remains in Table 9.
 SERIES = [
     ("isomer", "ISOMER"),

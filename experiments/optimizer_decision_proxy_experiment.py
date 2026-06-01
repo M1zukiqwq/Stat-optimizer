@@ -8,7 +8,7 @@ statistics improve optimizer-facing decisions under a transparent CBO-style
 cost proxy?
 
 For each synthetic histogram correction sample, the script:
-  1. builds stale, ISOMER, OASIS, OASIS-Proj, Hybrid, and fresh marginals;
+  1. builds stale, ISOMER, OASIS, OASIS, Hybrid, and fresh marginals;
   2. generates future predicates from the fresh/ground-truth distribution;
   3. estimates selectivity under each statistics state;
   4. feeds those estimates to scan and join choice proxies;
@@ -558,12 +558,12 @@ def write_latex_table(output_dir: Path, summary: Sequence[dict]) -> None:
             label = {
                 "stale": "Stale",
                 "isomer": "ISOMER",
-                "oasis": "OASIS",
-                "oasis_projected": "OASIS-Proj",
-                "oasis_soft_projection": "OASIS-Soft",
+                "oasis": "OASIS-noProj",
+                "oasis_projected": "OASIS",
+                "oasis_soft_projection": "Soft",
                 "hybrid": "Hybrid",
                 "aggressive_hybrid": "Aggressive",
-                "calibrated_hybrid": "Calibrated",
+                "calibrated_hybrid": "Router",
                 "fresh": "Fresh",
             }[method]
             f.write(

@@ -1,7 +1,7 @@
 \begin{table}[t]
   \centering
   \small
-  \caption{OASIS embedded in the FactorJoin bin-based join kernel. Join-cardinality Q-error ($\downarrow$) for a two-table equi-join whose join-key distributions drift; only the single-column key histogram consumed by FactorJoin varies across methods. The full two-stage OASIS and Hybrid recover most of the stale-to-fresh join error, whereas OASIS-noProj (the learned stage without projection) is actively harmful---it exceeds the stale baseline in this bilinear kernel.}
+  \caption{OASIS embedded in the FactorJoin bin-based join kernel. Join-cardinality Q-error ($\downarrow$) for a two-table equi-join whose join-key distributions drift; only the single-column key histogram consumed by FactorJoin varies across methods. OASIS and Hybrid recover most of the stale-to-fresh join error, whereas OASIS-noProj (the learned stage without projection) is actively harmful---it exceeds the stale baseline in this bilinear kernel.}
   \label{tab:factorjoin}
   \setlength{\tabcolsep}{4pt}
   \adjustbox{max width=\columnwidth}{%

@@ -8,9 +8,9 @@ QuickSel-H, and the OASIS MLP---and, for each, applies three Stage-2 settings:
 
   - none   : the raw Stage-1 marginal;
   - hard   : hard feedback-consistency projection initialized from that marginal;
-  - router : the residual-gated calibrated router over
+  - router : the residual-gated Router over
              {stale, ISOMER, this marginal, hard-proj(marginal),
-              conflict-aware soft(marginal)}.
+              Soft(marginal)}.
 
 The question is whether the Stage-2 calibration/router improves future
 single-column accuracy and lowers feedback residual *regardless of which Stage-1

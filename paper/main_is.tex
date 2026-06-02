@@ -550,8 +550,19 @@ future predicates.
 \input{../experiments/results/proj_v3/table_projection_init_classical.tex}
 \endgroup
 
-Tables~\ref{tab:projection_initialization} and \ref{tab:projection_init_classical}
-give the central single-column result. Initializing the same projection from the
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=.92\columnwidth]{figures/fig_single_column_drift_qerror.pdf}
+  \caption{Single-column selectivity Q-error versus drift intensity for the deployable
+  (feedback-projected) methods. Every prior is projected onto the same feedback
+  constraints; OASIS is the learned completion. OASIS is the lowest non-fresh method at
+  every drift level, and its margin over ISOMER and the self-tuning histograms widens as
+  drift grows. Geometric means from Table~\ref{tab:projection_init_classical}.}
+  \label{fig:single_column_drift}
+\end{figure}
+
+Tables~\ref{tab:projection_initialization} and \ref{tab:projection_init_classical} and
+Figure~\ref{fig:single_column_drift} give the central single-column result. Initializing the same projection from the
 learned completion lowers aggregate future-predicate Q-error from $1.523$ (ISOMER) to
 $1.328$, a $12.8\%$ reduction, and---unlike a reconstruction-trained prior---it also
 beats the classical self-tuning histograms, by $6.1\%$ over STHoles ($1.415$) and
@@ -706,7 +717,20 @@ drift.
 
 \input{../experiments/results/ood_drift_realism_v3/table_ood_drift_realism.tex}
 
-Table~\ref{tab:ood_drift_realism} shows the expected graceful degradation. The deployed
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/fig_ood_drift_realism.pdf}
+  \caption{Out-of-distribution drift families: percentage reduction in geometric-mean
+  selectivity Q-error relative to stale (higher is better; black ticks are the fresh
+  reference). The projected OASIS matches or edges ISOMER on every unseen family, while
+  the raw OASIS-noProj over-extrapolates---collapsing to near zero on skew evolution. The
+  prior is trained only on the domain-randomized mixture. Values from
+  Table~\ref{tab:ood_drift_realism}.}
+  \label{fig:ood_drift_realism}
+\end{figure}
+
+Table~\ref{tab:ood_drift_realism} and Figure~\ref{fig:ood_drift_realism} show the
+expected graceful degradation. The deployed
 projected and routed forms remain the best non-fresh methods, edging ISOMER on
 batch-load ($1.251$ vs $1.461$), skew ($1.171$ vs $1.182$), and outlier drift; and
 where the \emph{raw} prior over-extrapolates on an unseen family---batch-load
@@ -725,6 +749,18 @@ feedback observation.
 
 \input{../experiments/results/trace_grounded_drift_v3/table_trace_grounded_drift.tex}
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/fig_trace_grounded_drift.pdf}
+  \caption{Benchmark-inspired DML traces: percentage reduction in geometric-mean
+  selectivity Q-error relative to stale (cell value; positive is better, negative is a
+  regression below stale). The projected OASIS and the Hybrid track ISOMER and the fresh
+  reference, while the raw OASIS-noProj regresses on update-heavy traces (promotion price,
+  seasonal mixed)---the failure the projection and router are there to absorb. Values from
+  Table~\ref{tab:trace_grounded_drift}.}
+  \label{fig:trace_grounded_drift}
+\end{figure}
+
 The second uses a real public trace with a deliberately bounded claim: lacking access
 to private DBMS production logs, we use the NASA Kennedy Space Center HTTP request
 trace~\cite{itaNASAHTTP,arlitt1996web}, treating each request as an append to an event
@@ -733,8 +769,8 @@ length).
 
 \input{../experiments/results/public_trace_workload_v3/table_public_trace_workload.tex}
 
-Tables~\ref{tab:trace_grounded_drift} and \ref{tab:public_trace_workload} reinforce the
-safety story. On the DML traces the Hybrid tracks ISOMER and stays the best non-fresh
+Tables~\ref{tab:trace_grounded_drift} and \ref{tab:public_trace_workload}, with
+Figure~\ref{fig:trace_grounded_drift}, reinforce the safety story. On the DML traces the Hybrid tracks ISOMER and stays the best non-fresh
 choice. On the real NASA trace the boundary is sharper: the raw learned completion
 regresses in aggregate ($1.466$ versus stale $1.241$), and catastrophically on
 time-of-day predicates ($2.66$, worse than stale's $1.77$), because a real append

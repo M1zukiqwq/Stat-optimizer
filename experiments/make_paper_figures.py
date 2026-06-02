@@ -122,20 +122,29 @@ def set_qerror_log_axis(ax: plt.Axes, ticks: list[float], ylim: tuple[float, flo
 
 
 def plot_single_column_drift() -> None:
+    # v3: the deployable (feedback-projected) single-column comparison, from the
+    # projection-initialization sweep. Each prior is projected onto the same feedback
+    # constraints; OASIS is the learned completion. Mirrors tab:projection_init_classical.
     rows = read_csv(
         ROOT
         / "experiments"
         / "results"
-        / "synthetic_paper_suite_rerun_20260529"
-        / "main"
-        / "summary.csv"
+        / "proj_v3"
+        / "projection_summary.csv"
     )
-    methods = ["Prior", "STHoles", "QuickSel-H", "ISOMER", "OASIS"]
-    label_map = {"Prior": "Stale", "OASIS": "OASIS-noProj"}
+    methods = ["stale", "proj_stholes", "proj_quicksel", "proj_stale", "proj_oasis"]
+    label_map = {
+        "stale": "Stale",
+        "proj_stholes": "STHoles",
+        "proj_quicksel": "QuickSel-H",
+        "proj_stale": "ISOMER",
+        "proj_oasis": "OASIS",
+    }
+    rows = [r for r in rows if r["q_mods"].lstrip("-").isdigit()]  # drop the 'all' aggregate row
     q_values = sorted({int(r["q_mods"]) for r in rows if r["method"] in methods})
     by_method = {
         method: {
-            int(r["q_mods"]): float(r["qerror_mean"])
+            int(r["q_mods"]): float(r["qerror_gm"])
             for r in rows
             if r["method"] == method
         }
@@ -169,7 +178,7 @@ def plot_ood_drift_realism() -> None:
         ROOT
         / "experiments"
         / "results"
-        / "ood_drift_realism_20260529"
+        / "ood_drift_realism_v3"
         / "summary.csv"
     )
     patterns = [
@@ -239,7 +248,7 @@ def plot_trace_grounded_drift() -> None:
         ROOT
         / "experiments"
         / "results"
-        / "trace_grounded_drift_20260529"
+        / "trace_grounded_drift_v3"
         / "summary.csv"
     )
     traces = [

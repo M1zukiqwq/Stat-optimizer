@@ -1,0 +1,50 @@
+Feedback-budget sensitivity
+====================================
+All methods see the same truncated feedback window.
+
+K  Method          SelQE  JoinReg  JoinOpt  RiskResolved
+------------------------------------------------------------------
+2  stale           2.867   1.1871     79.0%           0.0%
+2  isomer          2.083   1.1031     84.8%          33.4%
+2  oasis           2.147   1.1100     84.0%          41.2%
+2  oasis_projected 1.994   1.0957     85.4%          46.4%
+2  oasis_soft_projection 1.998   1.0966     85.3%          46.0%
+2  hybrid          1.992   1.0943     85.7%          43.9%
+2  aggressive_hybrid 1.988   1.0933     85.8%          44.3%
+2  calibrated_hybrid 1.992   1.0944     85.7%          44.0%
+2  fresh           1.000   1.0000    100.0%         100.0%
+   Hybrid choices: isomer=31.2%, oasis=1.7%, oasis_projected=65.9%, stale=1.2%
+
+4  stale           2.867   1.1871     79.0%           0.0%
+4  isomer          1.797   1.0755     87.4%          47.2%
+4  oasis           1.924   1.0807     86.7%          52.9%
+4  oasis_projected 1.675   1.0595     89.2%          61.2%
+4  oasis_soft_projection 1.664   1.0582     89.2%          61.4%
+4  hybrid          1.665   1.0584     89.3%          59.5%
+4  aggressive_hybrid 1.658   1.0584     89.3%          59.7%
+4  calibrated_hybrid 1.656   1.0575     89.3%          60.1%
+4  fresh           1.000   1.0000    100.0%         100.0%
+   Hybrid choices: isomer=28.8%, oasis=4.2%, oasis_projected=65.6%, stale=1.4%
+
+8  stale           2.867   1.1871     79.0%           0.0%
+8  isomer          1.678   1.0639     88.6%          53.5%
+8  oasis           1.667   1.0545     89.5%          62.5%
+8  oasis_projected 1.475   1.0377     91.8%          71.4%
+8  oasis_soft_projection 1.425   1.0324     92.4%          73.7%
+8  hybrid          1.480   1.0391     91.5%          68.8%
+8  aggressive_hybrid 1.475   1.0390     91.6%          69.1%
+8  calibrated_hybrid 1.432   1.0336     92.3%          72.5%
+8  fresh           1.000   1.0000    100.0%         100.0%
+   Hybrid choices: isomer=31.2%, oasis=8.3%, oasis_projected=59.1%, stale=1.3%
+
+16 stale           2.867   1.1871     79.0%           0.0%
+16 isomer          1.664   1.0625     88.8%          54.3%
+16 oasis           1.543   1.0410     91.0%          66.8%
+16 oasis_projected 1.402   1.0297     92.7%          74.2%
+16 oasis_soft_projection 1.354   1.0245     93.3%          75.9%
+16 hybrid          1.425   1.0329     92.2%          71.2%
+16 aggressive_hybrid 1.428   1.0333     92.2%          71.1%
+16 calibrated_hybrid 1.367   1.0272     93.0%          74.8%
+16 fresh           1.000   1.0000    100.0%         100.0%
+   Hybrid choices: isomer=33.2%, oasis=14.5%, oasis_projected=51.3%, stale=1.0%
+

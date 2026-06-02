@@ -1,0 +1,18 @@
+Benchmark-inspired DML trace sanity check
+================================================
+OASIS checkpoint is trained on compound drift only; no trace retraining is used.
+
+Trace                  I/U/D    Growth  Stale  ISOMER  OASIS  Proj   Soft  Hybrid  Aggressive  Fresh
+----------------------------------------------------------------------------------------------------------------
+tpcds_sales_append     96/0/4    +79.9%  1.529   1.128  1.133  1.114  1.181   1.135       1.138  1.000
+  Hybrid choices: isomer=68.8%, oasis=11.5%, oasis_projected=19.8%
+promotion_price_revision 30/70/0   +33.9%  1.025   1.018  1.027  1.020  1.019   1.019       1.018  1.000
+  Hybrid choices: isomer=56.2%, oasis=2.1%, oasis_projected=36.5%, stale=5.2%
+inventory_restock      19/75/6   +19.8%  1.222   1.042  1.127  1.046  1.054   1.047       1.050  1.000
+  Hybrid choices: isomer=60.4%, oasis=6.2%, oasis_projected=33.3%
+returns_cancellation   38/17/45   -3.6%  2.047   1.163  1.161  1.118  1.187   1.170       1.172  1.000
+  Hybrid choices: isomer=78.1%, oasis=3.1%, oasis_projected=17.7%, stale=1.0%
+customer_segment_churn 36/62/2   +41.2%  1.172   1.057  1.159  1.079  1.084   1.061       1.063  1.000
+  Hybrid choices: isomer=80.2%, oasis=1.0%, oasis_projected=18.8%
+seasonal_mixed_maintenance 58/38/4   +50.8%  1.029   1.020  1.041  1.021  1.019   1.019       1.020  1.000
+  Hybrid choices: isomer=64.6%, oasis=2.1%, oasis_projected=33.3%

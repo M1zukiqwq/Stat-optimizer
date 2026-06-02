@@ -1,0 +1,18 @@
+OOD drift realism suite
+================================
+OASIS checkpoint is trained on compound drift only.
+
+Pattern        Stale  ISOMER  OASIS  Proj   Soft  Hybrid  Aggressive  Fresh
+------------------------------------------------------------------------------------------
+batch_load     4.203   1.461  1.987  1.251  1.422   1.390       1.390  1.000
+  Hybrid choices: isomer=61.7%, oasis=0.8%, oasis_projected=37.5%
+range_shift    1.994   1.210  1.381  1.212  1.286   1.221       1.229  1.000
+  Hybrid choices: isomer=75.0%, oasis=3.1%, oasis_projected=21.9%
+skew_evol      1.540   1.182  1.521  1.171  1.163   1.174       1.173  1.000
+  Hybrid choices: isomer=73.4%, oasis_projected=26.6%
+outlier        1.258   1.076  1.139  1.064  1.072   1.071       1.071  1.000
+  Hybrid choices: isomer=62.5%, oasis_projected=36.7%, stale=0.8%
+multimodal     1.238   1.066  1.136  1.063  1.065   1.065       1.069  1.000
+  Hybrid choices: isomer=69.5%, oasis=0.8%, oasis_projected=29.7%
+seasonal       1.212   1.066  1.127  1.058  1.064   1.063       1.062  1.000
+  Hybrid choices: isomer=68.0%, oasis_projected=32.0%

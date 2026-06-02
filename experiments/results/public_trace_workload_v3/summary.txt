@@ -1,0 +1,14 @@
+Public production-trace case study (NASA HTTP)
+========================================================
+The trace is a public HTTP request log; no private DBMS production query log is used.
+
+Column          Growth  Stale  ISOMER  OASIS  Proj   Soft  Hybrid  Router  Fresh
+------------------------------------------------------------------------------------------
+Reply bytes      800.0%  1.056   1.059  1.071  1.063  1.055   1.057   1.053  1.000
+  Router choices: isomer=36.5%, oasis=1.0%, oasis_projected=18.8%, oasis_soft_projection=42.7%, stale=1.0%
+Time of day      800.0%  1.767   1.254  2.661  1.342  1.318   1.251   1.255  1.000
+  Router choices: isomer=52.1%, oasis_projected=8.3%, oasis_soft_projection=39.6%
+Path length      800.0%  1.025   1.057  1.104  1.082  1.065   1.044   1.050  1.000
+  Router choices: isomer=30.2%, oasis_projected=10.4%, oasis_soft_projection=50.0%, stale=9.4%
+Aggregate            --  1.241   1.120  1.466  1.156  1.140   1.114   1.115  1.000
+  Router choices: isomer=39.6%, oasis=0.3%, oasis_projected=12.5%, oasis_soft_projection=44.1%, stale=3.5%

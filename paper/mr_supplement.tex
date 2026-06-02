@@ -141,7 +141,7 @@ The selection is plan-shape-safe: at dense planner feedback the routed output
 introduces new plan deviations in $1.1\%$ of queries, identical to ISOMER and
 below the raw prior's $2.3\%$.
 
-\subsection{Full-stack TPC-H safety: reproduces fresh, no bad tail}
+\subsection{Full-stack TPC-H safety: reproduces fresh-statistics behavior}
 \label{sec:mr-tpch}
 
 We re-run the TPC-H SF10 DML-drift study with the composite-objective prior over
@@ -149,23 +149,29 @@ three refresh-stream seeds, and report not only scan accuracy but the runtime
 distribution and plan-safety statistics a deployment reviewer cares about
 (Table~\ref{tab:tpch_runtime}). Because warm-cache runtime is determined by the
 plan the injected statistics induce, we time each \emph{distinct} (query, plan)
-once at full repetition and assign it to every method sharing that plan; on these
-six queries the six statistics states collapse to seven distinct plans, so this
-both removes redundant timing and surfaces directly that calibrated and fresh
-statistics induce identical plans.
+once at full repetition and assign it to every method sharing that plan; this
+removes redundant timing and surfaces directly that calibrated and fresh
+statistics induce the same plans on these queries.
 
-The accuracy and runtime story is stable across seeds. Stale statistics are badly
-wrong on the drifted date columns (scan Q-error $\approx 8.2$), and calibration
-repairs them to fresh quality (v3 and the Router $\approx 1.05$, fresh
-$\approx 1.05$). Calibrated statistics reproduce the fresh-statistics runtime
-\emph{exactly} (geometric-mean ratio $1.00$ vs fresh on every seed), because they
-induce the same plans, and run $\approx 10\%$ \emph{faster} than stale
-($0.89$--$0.91\times$): here the stale mis-estimate picks a worse plan, so leaving
-statistics stale is the slower option. Crucially for deployment safety, there are
-\emph{zero} queries that regress more than $15\%$ relative to stale under any
-calibrated method on any seed---no bad tail. The single query that changes plan
-stale$\to$fresh runs $1.75\times$ slower under stale than under the calibrated or
-fresh statistics. Maintaining these statistics requires one forward pass plus the
+The accuracy story is stable across seeds. Stale statistics are badly wrong on the
+drifted date columns (scan Q-error $5.23\pm0.24$), and calibration repairs them to
+fresh quality (OASIS $2.02$ and the Router $2.01$, matching fresh $2.01$). The
+runtime story is the deliberately bounded one. Calibrated statistics reproduce the
+\emph{fresh}-statistics runtime to within a few percent (geometric-mean
+time-to-fresh ratio $0.96$ for OASIS and $1.01$ for the Router), because they
+induce the fresh plans. The \emph{stale} wall-clock baseline, however, is not a
+reliable target: on this configuration the stale mis-estimate happens to pick a
+cheaper-to-run plan, so calibrated (and fresh) statistics run $\approx 1.5\times$
+\emph{slower} than stale (time-to-stale $1.49$ for OASIS, $1.57$ for the Router,
+$1.56$ for fresh itself), and a handful of queries per seed exceed the $15\%$
+regression band \emph{relative to stale}---but they regress relative to
+\emph{fresh} too, i.e.\ they are the price of the correct plan, not a calibration
+artifact. In a larger-drift configuration the same stale mis-estimate instead
+produced a plan that ran $1.56\times$ \emph{slower} than fresh, so the direction of
+the stale-vs-fresh gap is configuration-dependent. The deployment-relevant
+invariant is that calibrated statistics track fresh statistics in both accuracy and
+runtime, whereas stale statistics make the wall-clock outcome unpredictable in
+either direction. Maintaining these statistics requires one forward pass plus the
 projection ($\approx 1.13$\,ms per column, Section~\ref{sec:overhead}) and avoids
 the full-table \texttt{ANALYZE} scan that an SF10 refresh would otherwise incur.
 The claim remains the bounded one: calibrated statistics \emph{reproduce

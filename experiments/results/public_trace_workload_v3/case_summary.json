@@ -1,0 +1,35 @@
+[
+  {
+    "column": "reply_bytes",
+    "label": "Reply bytes",
+    "signal": "log reply size",
+    "n_cases": 96,
+    "initial_events_mean": 2000.0,
+    "appended_events_mean": 16000.0,
+    "growth_mean": 8.0,
+    "future_events_mean": 4000.0,
+    "stale_quantile_mae_mean": 0.010953142097478353
+  },
+  {
+    "column": "time_of_day",
+    "label": "Time of day",
+    "signal": "request timestamp",
+    "n_cases": 96,
+    "initial_events_mean": 2000.0,
+    "appended_events_mean": 16000.0,
+    "growth_mean": 8.0,
+    "future_events_mean": 4000.0,
+    "stale_quantile_mae_mean": 0.17278873831875863
+  },
+  {
+    "column": "path_length",
+    "label": "Path length",
+    "signal": "request path text",
+    "n_cases": 96,
+    "initial_events_mean": 2000.0,
+    "appended_events_mean": 16000.0,
+    "growth_mean": 8.0,
+    "future_events_mean": 4000.0,
+    "stale_quantile_mae_mean": 0.004491304733385603
+  }
+]

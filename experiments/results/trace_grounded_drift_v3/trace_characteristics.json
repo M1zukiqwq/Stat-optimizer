@@ -1,0 +1,80 @@
+[
+  {
+    "trace": "tpcds_sales_append",
+    "label": "Sales append",
+    "benchmark_anchor": "TPC-DS store_sales.ss_sold_date_sk",
+    "n_cases": 96,
+    "insert_frac": 0.9640241637770183,
+    "update_frac": 0.0,
+    "delete_frac": 0.03597583622298193,
+    "net_growth_mean": 0.7988817896479827,
+    "median_shift_mean": 0.22939516717169653,
+    "stale_quantile_mae_mean": 0.17653750661507117,
+    "ops_per_case_mean": 4107.0625
+  },
+  {
+    "trace": "promotion_price_revision",
+    "label": "Promotion price",
+    "benchmark_anchor": "TPC-DS catalog_sales.cs_sales_price",
+    "n_cases": 96,
+    "insert_frac": 0.30207884265504337,
+    "update_frac": 0.6979211573449567,
+    "delete_frac": 0.0,
+    "net_growth_mean": 0.33911424156513914,
+    "median_shift_mean": 0.006784218745301808,
+    "stale_quantile_mae_mean": 0.01379383689237175,
+    "ops_per_case_mean": 5072.895833333333
+  },
+  {
+    "trace": "inventory_restock",
+    "label": "Inventory restock",
+    "benchmark_anchor": "TPC-DS inventory.inv_quantity_on_hand",
+    "n_cases": 96,
+    "insert_frac": 0.19315491904742188,
+    "update_frac": 0.7464037326549353,
+    "delete_frac": 0.06044134829764237,
+    "net_growth_mean": 0.197603114684755,
+    "median_shift_mean": 0.06166651078743716,
+    "stale_quantile_mae_mean": 0.08107744565386232,
+    "ops_per_case_mean": 6296.083333333333
+  },
+  {
+    "trace": "returns_cancellation",
+    "label": "Returns/cancel",
+    "benchmark_anchor": "TPC-DS store_returns.sr_return_amt",
+    "n_cases": 96,
+    "insert_frac": 0.3810969153964772,
+    "update_frac": 0.17040281401006066,
+    "delete_frac": 0.4485002705934622,
+    "net_growth_mean": -0.035758300716700706,
+    "median_shift_mean": 0.31260383931844377,
+    "stale_quantile_mae_mean": 0.25289496813863716,
+    "ops_per_case_mean": 4599.833333333333
+  },
+  {
+    "trace": "customer_segment_churn",
+    "label": "Customer churn",
+    "benchmark_anchor": "TPC-DS customer demographic segment key",
+    "n_cases": 96,
+    "insert_frac": 0.3573505097771641,
+    "update_frac": 0.6187519402508853,
+    "delete_frac": 0.023897549971950604,
+    "net_growth_mean": 0.41247451380529604,
+    "median_shift_mean": 0.03889751915850911,
+    "stale_quantile_mae_mean": 0.05929980192988491,
+    "ops_per_case_mean": 5796.041666666667
+  },
+  {
+    "trace": "seasonal_mixed_maintenance",
+    "label": "Seasonal mixed",
+    "benchmark_anchor": "TPC-DS date/store seasonal workload",
+    "n_cases": 96,
+    "insert_frac": 0.5792434700948059,
+    "update_frac": 0.3819708162307556,
+    "delete_frac": 0.038785713674438324,
+    "net_growth_mean": 0.5083235127454028,
+    "median_shift_mean": 0.010301305540382041,
+    "stale_quantile_mae_mean": 0.010203055800535576,
+    "ops_per_case_mean": 4421.958333333333
+  }
+]

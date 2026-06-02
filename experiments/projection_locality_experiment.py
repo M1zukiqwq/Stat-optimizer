@@ -34,6 +34,8 @@ if str(_PIPELINE_DIR) not in sys.path:
 from histogram_math import evaluate_piecewise_cdf, inverse_piecewise_cdf
 from json_histogram_parser import load_feedback_sample
 from mlp_histogram_model_v2 import MlpHistogramModelV2
+from baselines import correct_stholes_tree
+from modern_baselines import correct_quicksel_h
 from optimizer_decision_proxy_experiment import (
     boundaries_from_quantiles,
     estimate_selectivity,
@@ -55,6 +57,12 @@ METHOD_ORDER = [
     "proj_oasis",
     "proj_fresh",
     "fresh",
+    # Classical-prior projection initializers (Exp 3): same hard projection,
+    # initialized from STHoles / QuickSel-H instead of stale or the OASIS MLP.
+    "stholes_no_proj",
+    "proj_stholes",
+    "quicksel_no_proj",
+    "proj_quicksel",
 ]
 
 METHOD_LABELS = {
@@ -64,6 +72,10 @@ METHOD_LABELS = {
     "proj_oasis": "OASIS",
     "proj_fresh": "Fresh-init",
     "fresh": "Fresh",
+    "stholes_no_proj": "STHoles (raw)",
+    "proj_stholes": "STHoles-init",
+    "quicksel_no_proj": "QuickSel-H (raw)",
+    "proj_quicksel": "QuickSel-init",
 }
 
 
@@ -151,6 +163,18 @@ def build_method_boundaries(
     fresh = boundaries_from_quantiles(sample.corrected_quantile_values or sample.prior.quantile_values)
     oasis = oasis_boundaries(sample, model, max_observations)
 
+    # Classical-prior initializers: correct the stale histogram with STHoles /
+    # QuickSel-H, then feed that corrected marginal into the *same* hard
+    # projection used for ISOMER and OASIS. This isolates whether the learned
+    # prior beats classical priors purely as a projection initializer.
+    stale_q = list(sample.prior.quantile_values)
+    stholes = boundaries_from_quantiles(
+        correct_stholes_tree(0.0, 1.0, stale_q, observations, num_buckets=num_buckets)
+    )
+    quicksel = boundaries_from_quantiles(
+        correct_quicksel_h(0.0, 1.0, stale_q, observations, num_buckets=num_buckets)
+    )
+
     return {
         "stale": stale,
         "proj_stale": isomer_boundaries(stale, observations, num_buckets),
@@ -158,6 +182,10 @@ def build_method_boundaries(
         "proj_oasis": isomer_boundaries(oasis, observations, num_buckets),
         "proj_fresh": isomer_boundaries(fresh, observations, num_buckets),
         "fresh": fresh,
+        "stholes_no_proj": stholes,
+        "proj_stholes": isomer_boundaries(stholes, observations, num_buckets),
+        "quicksel_no_proj": quicksel,
+        "proj_quicksel": isomer_boundaries(quicksel, observations, num_buckets),
     }
 
 
@@ -260,6 +288,76 @@ def pivot_projection_summary(summary: Sequence[dict]) -> List[dict]:
             }
         )
     return result
+
+
+def pivot_classical_init_summary(summary: Sequence[dict]) -> List[dict]:
+    """Per-q comparison of projection initializers: ISOMER (stale), STHoles,
+    QuickSel-H, OASIS, Fresh. Reports whether OASIS-init strictly beats the
+    classical-prior inits (the Exp-3 question)."""
+    by_group: Dict[object, Dict[str, dict]] = defaultdict(dict)
+    for row in summary:
+        by_group[row["q_mods"]][row["method"]] = row
+
+    result = []
+    for q_mods in sorted(by_group, key=lambda value: 999 if value == "all" else int(value)):
+        m = by_group[q_mods]
+        isomer = m["proj_stale"]["qerror_gm"]
+        stholes = m["proj_stholes"]["qerror_gm"]
+        quicksel = m["proj_quicksel"]["qerror_gm"]
+        oasis = m["proj_oasis"]["qerror_gm"]
+        result.append(
+            {
+                "q_mods": q_mods,
+                "stale_qerr_gm": m["stale"]["qerror_gm"],
+                "isomer_qerr_gm": isomer,
+                "stholes_init_qerr_gm": stholes,
+                "quicksel_init_qerr_gm": quicksel,
+                "oasis_init_qerr_gm": oasis,
+                "fresh_init_qerr_gm": m["proj_fresh"]["qerror_gm"],
+                # Positive => OASIS-init is better (lower Q-error) than the classical init.
+                "oasis_vs_stholes_pct": pct_improvement(stholes, oasis),
+                "oasis_vs_quicksel_pct": pct_improvement(quicksel, oasis),
+                "oasis_strictly_best": oasis < min(isomer, stholes, quicksel) - 1e-9,
+            }
+        )
+    return result
+
+
+def write_classical_init_table(output_dir: Path, pivot_rows: Sequence[dict]) -> None:
+    path = output_dir / "table_projection_init_classical.tex"
+    with path.open("w") as handle:
+        handle.write("\\begin{table*}[t]\n")
+        handle.write("  \\centering\n")
+        handle.write("  \\small\n")
+        handle.write("  \\caption{Projection-initialization with classical priors. The hard projection and feedback constraints are identical across columns; only the marginal that initializes the projection changes. \\textbf{ISOMER} initializes from the stale histogram; \\textbf{STHoles-init} and \\textbf{QuickSel-init} initialize from those self-tuning-histogram priors; \\textbf{OASIS} initializes from the learned MLP; \\textbf{Fresh-init} is the post-drift upper bound. Last two columns are the OASIS-init improvement over the classical inits (positive favors OASIS).}\n")
+        handle.write("  \\label{tab:projection_init_classical}\n")
+        handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
+        handle.write("  \\resizebox{\\textwidth}{!}{%\n")
+        handle.write("  \\begin{tabular}{c | rrrrrr | rr}\n")
+        handle.write("    \\toprule\n")
+        handle.write("    $q$ & Stale & ISOMER & STHoles-init & QuickSel-init & OASIS & Fresh-init & OASIS vs STHoles & OASIS vs QuickSel \\\\\n")
+        handle.write("    \\midrule\n")
+        for row in pivot_rows:
+            q_label = row["q_mods"]
+            if q_label == "all":
+                handle.write("    \\midrule\n")
+                q_text = "\\textbf{All}"
+            else:
+                q_text = str(q_label)
+            handle.write(
+                f"    {q_text} & {row['stale_qerr_gm']:.3f} & "
+                f"{row['isomer_qerr_gm']:.3f} & "
+                f"{row['stholes_init_qerr_gm']:.3f} & "
+                f"{row['quicksel_init_qerr_gm']:.3f} & "
+                f"{row['oasis_init_qerr_gm']:.3f} & "
+                f"{row['fresh_init_qerr_gm']:.3f} & "
+                f"{row['oasis_vs_stholes_pct']:+.1f}\\% & "
+                f"{row['oasis_vs_quicksel_pct']:+.1f}\\% \\\\\n"
+            )
+        handle.write("    \\bottomrule\n")
+        handle.write("  \\end{tabular}%\n")
+        handle.write("  }\n")
+        handle.write("\\end{table*}\n")
 
 
 def write_csv(path: Path, rows: Sequence[dict]) -> None:
@@ -515,6 +613,7 @@ def run_experiment(args: argparse.Namespace) -> None:
         row["q_mods"] = "all"
     projection_summary.extend(all_projection_summary)
     projection_pivot = pivot_projection_summary(projection_summary)
+    classical_init_pivot = pivot_classical_init_summary(projection_summary)
 
     locality_rows: List[PredicateRow] = []
     for row in rows:
@@ -537,7 +636,21 @@ def run_experiment(args: argparse.Namespace) -> None:
     write_csv(output_dir / "locality_summary.csv", locality_summary)
     write_projection_table(output_dir, projection_pivot)
     write_locality_table(output_dir, locality_summary)
+    write_json(output_dir / "classical_init_pivot_summary.json", classical_init_pivot)
+    write_csv(output_dir / "classical_init_pivot_summary.csv", classical_init_pivot)
+    write_classical_init_table(output_dir, classical_init_pivot)
     write_text_summary(output_dir, projection_pivot, locality_summary)
+    print("\nClassical-prior projection-init comparison (geomean Q-error):")
+    print("q      Stale  ISOMER  STHoles  QuickSel  OASIS  Fresh  OvsST   OvsQS  OASISbest")
+    print("-" * 86)
+    for row in classical_init_pivot:
+        print(
+            f"{str(row['q_mods']):<6s} {row['stale_qerr_gm']:6.3f}  "
+            f"{row['isomer_qerr_gm']:6.3f}  {row['stholes_init_qerr_gm']:7.3f}  "
+            f"{row['quicksel_init_qerr_gm']:8.3f}  {row['oasis_init_qerr_gm']:5.3f}  "
+            f"{row['fresh_init_qerr_gm']:5.3f}  {row['oasis_vs_stholes_pct']:+5.1f}%  "
+            f"{row['oasis_vs_quicksel_pct']:+5.1f}%  {str(row['oasis_strictly_best'])}"
+        )
 
 
 def parse_args() -> argparse.Namespace:

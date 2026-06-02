@@ -1,0 +1,22 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Projection-initialization with classical priors. The hard projection and feedback constraints are identical across columns; only the marginal that initializes the projection changes. \textbf{ISOMER} initializes from the stale histogram; \textbf{STHoles-init} and \textbf{QuickSel-init} initialize from those self-tuning-histogram priors; \textbf{OASIS} initializes from the learned MLP; \textbf{Fresh-init} is the post-drift upper bound. Last two columns are the OASIS-init improvement over the classical inits (positive favors OASIS).}
+  \label{tab:projection_init_classical}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{c | rrrrrr | rr}
+    \toprule
+    $q$ & Stale & ISOMER & STHoles-init & QuickSel-init & OASIS & Fresh-init & OASIS vs STHoles & OASIS vs QuickSel \\
+    \midrule
+    1 & 1.209 & 1.142 & 1.147 & 1.165 & 1.148 & 1.104 & -0.1\% & +1.4\% \\
+    5 & 1.968 & 1.394 & 1.344 & 1.358 & 1.318 & 1.163 & +1.9\% & +2.9\% \\
+    10 & 2.990 & 1.617 & 1.554 & 1.528 & 1.372 & 1.176 & +11.8\% & +10.2\% \\
+    20 & 3.253 & 1.788 & 1.565 & 1.484 & 1.391 & 1.156 & +11.2\% & +6.3\% \\
+    30 & 3.193 & 1.779 & 1.510 & 1.540 & 1.429 & 1.159 & +5.3\% & +7.2\% \\
+    \midrule
+    \textbf{All} & 2.364 & 1.523 & 1.415 & 1.407 & 1.328 & 1.151 & +6.1\% & +5.7\% \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

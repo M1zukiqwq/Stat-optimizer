@@ -1,0 +1,47 @@
+Multi-configuration PostgreSQL planner-only stats injection
+================================================================
+No wall-clock runtime is measured. True rows come from COUNT(*);
+estimated rows and plan shapes come from EXPLAIN (FORMAT JSON).
+
+Configurations: 12
+Queries per configuration per method: 84
+
+Aggregate over all query instances:
+Method          RowQE  QEImp  BeatStale  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------------
+stale           27.768    0.0%       0.0%       56.1%       0.0%     0.0%
+isomer          2.374   91.5%      97.2%       96.0%      92.3%     1.1%
+oasis           3.703   86.7%      97.4%       90.9%      82.2%     2.3%
+oasis_projected 2.362   91.5%      97.5%       95.9%      92.1%     1.1%
+oasis_soft_projection 2.433   91.2%      97.5%       96.0%      92.3%     1.1%
+hybrid          2.374   91.5%      97.3%       96.0%      92.3%     1.1%
+aggressive_hybrid 2.365   91.5%      97.5%       96.0%      92.3%     1.1%
+calibrated_hybrid 2.369   91.5%      97.5%       96.1%      92.6%     1.1%
+fresh           1.412   94.9%      99.6%      100.0%     100.0%     0.0%
+
+Mean across configurations:
+Method          RowQE(mean±sd)  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------
+stale           28.453±6.576      56.1%       0.0%     0.0%
+isomer          2.390±0.286      96.0%      91.9%     1.0%
+oasis           3.894±1.252      90.9%      80.7%     2.4%
+oasis_projected 2.377±0.269      95.9%      91.7%     1.0%
+oasis_soft_projection 2.452±0.312      96.0%      91.9%     1.0%
+hybrid          2.391±0.289      96.0%      91.9%     1.0%
+aggressive_hybrid 2.382±0.283      96.0%      91.9%     1.0%
+calibrated_hybrid 2.386±0.288      96.1%      92.1%     1.0%
+fresh           1.415±0.092     100.0%     100.0%     0.0%
+
+Hybrid choices:
+  left_shift_rows100000_seed20260529: isomer
+  left_shift_rows100000_seed20260530: isomer
+  left_shift_rows100000_seed20260531: isomer
+  left_shift_rows200000_seed20260529: isomer
+  left_shift_rows200000_seed20260530: isomer
+  left_shift_rows200000_seed20260531: isomer
+  right_shift_rows100000_seed20260529: isomer
+  right_shift_rows100000_seed20260530: isomer
+  right_shift_rows100000_seed20260531: isomer
+  right_shift_rows200000_seed20260529: isomer
+  right_shift_rows200000_seed20260530: isomer
+  right_shift_rows200000_seed20260531: isomer

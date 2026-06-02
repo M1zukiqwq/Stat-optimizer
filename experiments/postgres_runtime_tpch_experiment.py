@@ -24,6 +24,7 @@ import json
 import statistics
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, asdict
 from datetime import date, timedelta
 from pathlib import Path
@@ -320,24 +321,46 @@ def run(args) -> None:
     changed = {q["name"]: plan_sig["stale"][q["name"]] != plan_sig["fresh"][q["name"]] for q in queries}
     print(f"[info] {sum(changed.values())}/{len(queries)} queries change plan stale->fresh")
 
-    # timing pass
+    # timing pass — dedup by plan signature: a query's warm-cache runtime depends
+    # ONLY on the plan the injected stats induce, so methods that produce an
+    # identical plan have identical runtime by construction. We therefore time
+    # each DISTINCT (query, plan) once at full timing_runs and assign it to every
+    # method sharing that plan. This is methodologically equivalent (same 7-run
+    # median per distinct plan) but avoids re-timing identical plans, and reduces
+    # timing noise. Progress is logged per (query, plan).
     rows: List[BRow] = []
-    for method in B_METHODS:
-        for logical in TARGETS:
-            inject_method_column(args, logical, method, col_boundaries[logical][method], *col_domain[logical])
-        for q in queries:
-            t = timed_median(args, q["sql"])
-            est = scan_est[method][q["name"]]
-            truth = scan_truth[q["name"]]
+    plan_time: Dict[Tuple[str, str], Dict[str, float]] = {}
+    total_plans = sum(len({plan_sig[m][q["name"]] for m in B_METHODS}) for q in queries)
+    done_plans = 0
+    for q in queries:
+        qname = q["name"]
+        rep_by_sig: Dict[str, str] = {}
+        for method in B_METHODS:
+            rep_by_sig.setdefault(plan_sig[method][qname], method)  # first method per distinct plan
+        for sig, rep in rep_by_sig.items():
+            for logical in TARGETS:
+                inject_method_column(args, logical, rep, col_boundaries[logical][rep], *col_domain[logical])
+            t0 = time.time()
+            plan_time[(qname, sig)] = timed_median(args, q["sql"])
+            done_plans += 1
+            print(f"[time {done_plans}/{total_plans}] {qname} plan={sig[:10]} rep={rep} "
+                  f"median={plan_time[(qname, sig)]['median']:.0f}ms "
+                  f"({len(rep_by_sig)} distinct plans for {qname}, {time.time()-t0:.0f}s)",
+                  flush=True)
+        for method in B_METHODS:
+            t = plan_time[(qname, plan_sig[method][qname])]
+            est = scan_est[method][qname]
+            truth = scan_truth[qname]
             rows.append(BRow(
-                query=q["name"], method=method, target_col=q["target"],
+                query=qname, method=method, target_col=q["target"],
                 scan_true_rows=truth, scan_est_rows=est,
                 scan_row_qerr=pg.card_qerr(est, truth),
-                plan_signature=plan_sig[method][q["name"]],
-                plan_changed_vs_stale_fresh=changed[q["name"]],
+                plan_signature=plan_sig[method][qname],
+                plan_changed_vs_stale_fresh=changed[qname],
                 median_ms=t["median"], min_ms=t["min"], iqr_ms=t["iqr"], n_runs=int(t["n"]),
             ))
-        print(f"[info] timed method={method}")
+    print(f"[info] timed {total_plans} distinct (query,plan) pairs "
+          f"(vs {len(B_METHODS)*len(queries)} method-query cells)")
 
     summary = summarize(rows, changed, queries)
     write_outputs(args, rows, summary)

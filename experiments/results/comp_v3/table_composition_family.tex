@@ -1,0 +1,21 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{OASIS as a drop-in marginal upgrade across a family of composition estimators. Average joint Q-error ($\downarrow$) for two-column range predicates; dependence structure is held fixed per estimator and only the marginal input varies. OASIS and Hybrid improve every estimator, whereas OASIS-noProj (the learned stage without the feedback-consistency projection) is weak and unstable, confirming the projection is required across composition methods.}
+  \label{tab:composition_family}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{l | rrrrrrrr | rrrr}
+    \toprule
+    Estimator & Stale & OASIS-noProj & ISOMER & OASIS & Soft & Hybrid & Aggr. & Fresh & OASIS-noProj +\% & OASIS +\% & Soft +\% & Aggr. +\% \\
+    \midrule
+    Independence & 1.924 & 1.913 & \textbf{1.191} & 1.231 & 1.278 & 1.203 & 1.202 & 1.138 & +0.6\% & +36.0\% & +33.6\% & +37.5\% \\
+    IPF/Sinkhorn-2D & 1.668 & 1.837 & 1.302 & 1.319 & 1.332 & \textbf{1.292} & \textbf{1.291} & 1.248 & -10.1\% & +20.9\% & +20.2\% & +22.6\% \\
+    Gaussian copula & 1.645 & 1.901 & 1.251 & 1.265 & 1.296 & \textbf{1.238} & \textbf{1.237} & 1.182 & -15.6\% & +23.1\% & +21.2\% & +24.8\% \\
+    Clayton copula & 1.836 & 1.949 & 1.310 & 1.300 & 1.333 & \textbf{1.275} & \textbf{1.274} & 1.222 & -6.2\% & +29.2\% & +27.4\% & +30.6\% \\
+    Gumbel copula & 1.639 & 1.833 & 1.254 & 1.271 & 1.297 & \textbf{1.246} & \textbf{1.245} & 1.192 & -11.8\% & +22.4\% & +20.9\% & +24.0\% \\
+    Frank copula & 1.621 & 1.899 & 1.291 & 1.302 & 1.329 & \textbf{1.276} & \textbf{1.276} & 1.221 & -17.2\% & +19.7\% & +18.0\% & +21.3\% \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

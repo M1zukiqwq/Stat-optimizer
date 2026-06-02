@@ -363,6 +363,18 @@ def make_feedback_sample(initial: np.ndarray, fresh: np.ndarray, args: argparse.
         ("BETWEEN", 0.70, 0.90),
     ]
 
+    # Sparse-feedback sweep (Exp 2): keep an evenly spaced subset of the 16
+    # feedback predicates so the projection sees genuinely fewer constraints
+    # (not just a smaller MLP window). num_feedback>=len keeps all of them.
+    num_feedback = getattr(args, "num_feedback", 0) or len(feedback_specs)
+    if 0 < num_feedback < len(feedback_specs):
+        if num_feedback > 1:
+            idx_keep = sorted({round(i * (len(feedback_specs) - 1) / (num_feedback - 1))
+                               for i in range(num_feedback)})
+        else:
+            idx_keep = [len(feedback_specs) // 2]
+        feedback_specs = [feedback_specs[i] for i in idx_keep]
+
     observations: List[FeedbackObservation] = []
     base_time = datetime(2026, 5, 29, tzinfo=timezone.utc)
     for idx, (pred_type, prob, upper_prob) in enumerate(feedback_specs):
@@ -1151,6 +1163,9 @@ def parse_args() -> argparse.Namespace:
                         help="Rows for learned-stat source tables; 0 reuses --rows.")
     parser.add_argument("--num-buckets", type=int, default=10)
     parser.add_argument("--max-observations", type=int, default=16)
+    parser.add_argument("--num-feedback", type=int, default=0,
+                        help="Exp 2 sparse-feedback sweep: keep this many evenly spaced feedback predicates "
+                             "(0 or >=16 keeps all 16). Reduces the projection's feedback constraints, not just the MLP window.")
     parser.add_argument("--aggressive-damping-grid", type=float, nargs="+",
                         default=[0.35, 0.50, 0.65, 0.80, 0.95])
     parser.add_argument("--aggressive-recent-windows", type=int, nargs="+",

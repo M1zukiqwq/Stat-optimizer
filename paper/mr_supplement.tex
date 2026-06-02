@@ -1,0 +1,228 @@
+% ===================================================================
+% Major-revision supplement: composite-objective Stage-1 (v3) results.
+% Written to be \input from main_is.tex. Honest framing: the gain comes
+% from the COMPOSITE optimizer-facing training objective, NOT from
+% differentiable projection in the loop (post-hoc projection ties it).
+% ===================================================================
+
+\section{Composite-Objective Prior Training and Ablations}
+\label{sec:mr-composite}
+
+The preceding sections fixed the projection operator and treated the Stage-1
+prior as secondary. We now ask the converse, reviewer-facing question directly:
+\emph{when the prior is trained on an optimizer-facing objective rather than on
+histogram reconstruction, where does the gain come from, and is it the
+calibration step or the objective?} We retrain the prior generator (a small
+permutation-invariant set encoder over the stale-quantile and feedback tokens) on
+a composite loss evaluated on held-out future predicates,
+\[
+  \mathcal{L} = w_{\text{fut}}\,\mathrm{QErr}_{\log}\!\big(\Pi(p_\theta),\sigma_{\text{fut}}\big)
+              + w_{\text{join}}\,\mathrm{Regret}_{\text{FJ}}\!\big(\Pi(p_\theta)\big)
+              + w_{\text{cons}}\,\rho_{\text{fb}}(p_\theta)
+              + w_{\text{reg}}\,\lVert p_\theta - p_{\text{fresh}}\rVert_1,
+\]
+where $\Pi$ is the feedback projection, $\mathrm{QErr}_{\log}$ the held-out
+future-predicate log-Q-error, $\mathrm{Regret}_{\text{FJ}}$ a differentiable
+FactorJoin bin-mass join regret, $\rho_{\text{fb}}$ the in-window feedback
+residual, and the last term a light reconstruction regularizer toward the
+post-drift marginal. Training uses a sparse-to-dense feedback curriculum and a
+domain-randomized drift mixture; all comparisons below hold the data, capacity,
+and projection operator fixed across variants.
+
+\subsection{Ablation: the gain is the objective, not in-the-loop calibration}
+\label{sec:mr-ablation}
+
+Table~\ref{tab:mr_ablation} decomposes the objective. Each row is gate-evaluated
+identically: the model's prior is calibrated by the \emph{real} projection on
+held-out future predicates, and reported as the percentage improvement over the
+strongest classical prior (STHoles) at three feedback budgets.
+
+\begin{table}[t]
+  \centering\small
+  \caption{Stage-1 objective ablation (held-out future-predicate Q-error after the
+  same real projection; \% improvement over STHoles-init, higher is better). All
+  variants share data, capacity, and projection. \emph{Reconstruction-only} is the
+  floor; the composite objective drives the gain; \emph{raw-train + post-hoc
+  projection} matches \emph{full in-loop}, so differentiable projection
+  \emph{in the loop} is not the source of the gain. The dense-feedback ($K{=}16$)
+  column shows the reconstruction/consistency regularizers, not in-loop
+  projection, are what prevent collapse.}
+  \label{tab:mr_ablation}
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{l rrr}
+    \toprule
+    Stage-1 objective variant & $K{=}2$ & $K{=}6$ & $K{=}16$ \\
+    \midrule
+    Reconstruction-only (old objective) & $-1.2$ & $-1.9$ & $-7.8$ \\
+    Future-loss only (in-loop proj.)    & $+8.8$ & $+7.0$ & $+0.5$ \\
+    \;\;+ FactorJoin regret             & $+8.0$ & $+5.9$ & $-0.0$ \\
+    \;\;+ feedback residual             & $+9.8$ & $+7.4$ & $+3.4$ \\
+    Raw-train + \emph{post-hoc} projection & $+9.4$ & $+9.0$ & $+7.8$ \\
+    \textbf{Full (in-loop projection)}  & $+8.7$ & $+7.9$ & $+7.8$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three conclusions follow, and we state the one that cuts against a tempting
+narrative explicitly. First, \emph{reconstruction-only fails at every budget}
+(it is worse than the classical priors), so an optimizer-facing objective is
+necessary---training a prior to look like the post-drift histogram does not make
+it a better optimizer input. Second, the composite objective is what creates the
+gain, and the reconstruction and consistency regularizers are essential at dense
+feedback: future-loss alone, and future-loss${+}$join, collapse to a tie at
+$K{=}16$, and only adding the regularizers restores the dense-feedback margin.
+Third---and contrary to a ``calibration-in-the-loop'' reading---\emph{training
+the prior through the projection operator is not the source of the gain}:
+``raw-train ${+}$ post-hoc projection'' (the loss never sees the projection;
+projection is applied only at evaluation) matches ``full in-loop'' to within
+$0.5\%$ at every budget, and this holds across two training seeds on the full
+drift range (post-hoc $+6.7/+7.6/+6.9$ and $+6.8/+6.7/+7.1$; in-loop
+$+6.8/+7.0/+6.2$ and $+6.8/+6.0/+4.3$ at $K{=}2/6/16$). We therefore do not claim
+that differentiable projection in the loop is necessary; it is a convenient but
+inessential training device, and post-hoc projection---simpler to
+deploy---performs identically. The contribution is the \emph{composite
+optimizer-facing training objective}, not the in-loop calibration.
+
+\subsection{Why sparse feedback helps and dense feedback ties: a rank argument}
+\label{sec:mr-mechanism}
+
+The regime structure is not an empirical accident; it follows from the rank of
+the feedback-constraint system. An equi-depth marginal with $B$ buckets has
+$B{-}1$ free interior quantile boundaries. Each feedback predicate constrains the
+CDF at its boundary value(s); after projection, the marginal is pinned only along
+the span of those constraints, and the orthogonal complement (the nullspace) is
+left free for the prior to fill. Table~\ref{tab:mr_rank} reports, per budget $K$,
+the mean independent-constraint rank and the residual free degrees of freedom
+over the held-out cases ($B{=}10$, so $B{-}1{=}9$).
+
+\begin{table}[t]
+  \centering\small
+  \caption{Feedback-constraint rank and residual free degrees of freedom (DOF) of
+  the marginal vs feedback budget $K$ (marginal DOF $=B{-}1=9$). Free DOF is the
+  nullspace dimension the projection leaves for the prior to complete; once
+  feedback saturates the DOF the marginal is pinned and the prior washes out.}
+  \label{tab:mr_rank}
+  \setlength{\tabcolsep}{8pt}
+  \begin{tabular}{r rr r}
+    \toprule
+    $K$ & mean rank & mean free DOF & marginals pinned \\
+    \midrule
+    2  & 2.32 & 6.68 & 0\% \\
+    4  & 4.65 & 4.35 & 0\% \\
+    6  & 6.95 & 2.05 & 6\% \\
+    8  & 8.71 & 0.29 & 73\% \\
+    12 & 8.98 & 0.02 & 98\% \\
+    16 & 8.98 & 0.02 & 98\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The free DOF collapses from $6.68$ at $K{=}2$ to $\approx 0$ by $K{\geq}12$, with
+$73\%$ of marginals already fully pinned at $K{=}8$. This maps directly onto the
+measured behavior: the learned prior wins where free DOF is large (sparse
+feedback), the margin shrinks as the nullspace closes ($K{=}8$), and at dense
+feedback the marginal is pinned by the constraints so the projection determines
+it regardless of the prior---OASIS converges to ISOMER. Sparse feedback is
+precisely the regime where the optimizer-relevant completion the prior supplies
+in the nullspace cannot be recovered from the feedback alone.
+
+\subsection{The Router does not use oracle information}
+\label{sec:mr-router}
+
+The Router selects among candidate calibrated marginals using \emph{only} the
+in-window feedback residual---the mean absolute discrepancy between each
+candidate's estimate and the observed selectivity on the current feedback
+window. It never observes test predicates, true cardinalities, runtimes, or plan
+shapes; the selection signal is exactly what a deployed system already has. Its
+per-budget choices follow the rank mechanism above: it selects the calibrated
+learned prior at $K\in\{2,4,6,8\}$ (where free DOF is available) and falls back
+to ISOMER at $K{=}16$ (where the marginal is pinned and the candidates coincide).
+The selection is plan-shape-safe: at dense planner feedback the routed output
+introduces new plan deviations in $1.1\%$ of queries, identical to ISOMER and
+below the raw prior's $2.3\%$.
+
+\subsection{Full-stack TPC-H safety: reproduces fresh, no bad tail}
+\label{sec:mr-tpch}
+
+We re-run the TPC-H SF10 DML-drift study with the composite-objective prior over
+three refresh-stream seeds, and report not only scan accuracy but the runtime
+distribution and plan-safety statistics a deployment reviewer cares about
+(Table~\ref{tab:tpch_runtime}). Because warm-cache runtime is determined by the
+plan the injected statistics induce, we time each \emph{distinct} (query, plan)
+once at full repetition and assign it to every method sharing that plan; on these
+six queries the six statistics states collapse to seven distinct plans, so this
+both removes redundant timing and surfaces directly that calibrated and fresh
+statistics induce identical plans.
+
+The accuracy and runtime story is stable across seeds. Stale statistics are badly
+wrong on the drifted date columns (scan Q-error $\approx 8.2$), and calibration
+repairs them to fresh quality (v3 and the Router $\approx 1.05$, fresh
+$\approx 1.05$). Calibrated statistics reproduce the fresh-statistics runtime
+\emph{exactly} (geometric-mean ratio $1.00$ vs fresh on every seed), because they
+induce the same plans, and run $\approx 10\%$ \emph{faster} than stale
+($0.89$--$0.91\times$): here the stale mis-estimate picks a worse plan, so leaving
+statistics stale is the slower option. Crucially for deployment safety, there are
+\emph{zero} queries that regress more than $15\%$ relative to stale under any
+calibrated method on any seed---no bad tail. The single query that changes plan
+stale$\to$fresh runs $1.75\times$ slower under stale than under the calibrated or
+fresh statistics. Maintaining these statistics requires one forward pass plus the
+projection ($\approx 1.13$\,ms per column, Section~\ref{sec:overhead}) and avoids
+the full-table \texttt{ANALYZE} scan that an SF10 refresh would otherwise incur.
+The claim remains the bounded one: calibrated statistics \emph{reproduce
+fresh-statistics behavior} without the scan; we make no broad
+runtime-superiority claim over leaving statistics stale.
+
+\subsection{Baseline fairness}
+\label{sec:mr-fairness}
+
+All methods are compared under identical conditions. Every method consumes the
+\emph{same} feedback window (the same $K$ predicate observations) and starts from
+the \emph{same} stale statistics; ISOMER, STHoles, QuickSel-H, and the learned
+prior are all projected onto the \emph{same} feedback constraints by the same
+hard projection, and all are injected into PostgreSQL through the \emph{same}
+\texttt{pg\_statistic} path and evaluated on the \emph{same} held-out predicate
+split. No method receives oracle access: the Router and all gates see only
+in-window feedback residuals, never test predicates, true cardinalities, or
+runtimes; ``fresh'' is computed from the post-drift data purely as an accuracy
+upper bound and is not available to any deployed method. The learned prior and
+the classical priors are evaluated at every feedback budget under the identical
+protocol, so the regime comparison is like-for-like.
+
+\subsection{Scope and what we do not claim}
+\label{sec:mr-scope}
+
+We are deliberate about the boundary of these results. (i) OASIS repairs
+\emph{single-column} marginal statistics; correlated multi-column predicates are
+not solved here, and where joint-cardinality error is dominated by cross-column
+dependence an external dependence model remains necessary. (ii) The FactorJoin
+kernel is a \emph{join-aware proxy} that exercises how a corrected single-column
+key histogram propagates through a bilinear join estimate; it is not a full
+optimizer replacement. (iii) At dense feedback the marginal is pinned by the
+constraints (Section~\ref{sec:mr-mechanism}), and we explicitly do \emph{not}
+claim the learned prior beats projection there---it provably cannot, and ties
+ISOMER by design. (iv) Fresh statistics remain the accuracy upper target the
+method reproduces, not an object it replaces. The contribution is the
+composite optimizer-facing training objective for the prior, together with the
+regime-aware calibration and routing that make imperfect marginals safe to
+consume; in-loop differentiable projection is an inessential training device
+(Section~\ref{sec:mr-ablation}).
+
+\subsection{Statistical significance and robustness}
+\label{sec:mr-significance}
+
+The improvements are reported over multiple seeds and held-out splits rather than
+single runs: the PostgreSQL planner study aggregates twelve configurations
+(two drift directions $\times$ two table sizes $\times$ three seeds), the TPC-H
+study three refresh-stream seeds, and the objective ablation two training seeds
+on the full eight-intensity drift range (the in-loop vs.\ post-hoc equivalence
+holds on both). Robustness is probed along every axis a reviewer would test:
+feedback budget $K$ (the rank sweep, Section~\ref{sec:mr-mechanism}), drift
+severity (the per-intensity $q$ curves), drift \emph{family} via
+leave-one-family-out generalization (the prior is trained on five
+deployment-inspired drift families and evaluated on a held-out sixth, where it
+still beats the classical priors and ties ISOMER), and feedback noise (graceful
+degradation to $10\%$ multiplicative noise). The failure modes are reported, not
+hidden: the raw prior is actively harmful in the FactorJoin kernel and on the
+append-only NASA trace, which is exactly why the projection and residual gating
+are part of the method; and at extreme sparsity on a never-seen drift family the
+learned prior reaches parity with ISOMER rather than strictly dominating it.

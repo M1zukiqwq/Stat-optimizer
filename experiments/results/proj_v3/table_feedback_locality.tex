@@ -1,0 +1,18 @@
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Feedback-locality diagnostic on the mixed predicate population. Held-out future predicates are binned by the directed Hausdorff distance from their endpoints to the nearest feedback endpoint in fresh-CDF space. Values are geometric-mean selectivity Q-error; ISOMER is projection from a stale start and OASIS is the learned prior plus hard projection. OASIS win is the per-predicate fraction on which OASIS beats ISOMER.}
+  \label{tab:feedback_locality}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{l | r | rrrrr | rr}
+    \toprule
+    Locality & Preds & Stale & ISOMER & OASIS-noProj & OASIS & Fresh & OASIS vs ISOMER & OASIS win \\
+    \midrule
+    near<= 0.05 & 10556 & 2.097 & 1.424 & 1.389 & 1.295 & 1.000 & +9.1\% & 64.2\% \\
+    mid<= 0.15 & 6911 & 2.494 & 1.561 & 1.473 & 1.335 & 1.000 & +14.5\% & 63.2\% \\
+    far> 0.15 & 3013 & 3.186 & 1.819 & 1.564 & 1.433 & 1.000 & +21.2\% & 66.1\% \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}

@@ -881,8 +881,10 @@ candidate. Robustness along the remaining axes is consistent with the mechanism:
 feedback-budget sweep (Table~\ref{tab:feedback_budget_sensitivity}) is the rank curve,
 the per-intensity $q$ columns probe drift severity, leave-one-family-out validation
 probes drift family (the prior trained on five families and tested on a held-out sixth
-beats the classical priors and ties ISOMER), and under multiplicative feedback noise the
-deployed Hybrid degrades gracefully. The failure modes are reported, not hidden: the raw
+beats the classical priors and ties ISOMER), and under $10\%$ multiplicative feedback
+noise the Router degrades gracefully---selectivity Q-error rises only from $1.375$ to
+$1.418$ and join-optimal choices from $92.9\%$ to $92.2\%$, still far below ISOMER
+($1.758$) and stale ($2.867$). The failure modes are reported, not hidden: the raw
 prior is harmful in FactorJoin and on the NASA trace, which is exactly why the projection
 and residual gating are part of the method.
 

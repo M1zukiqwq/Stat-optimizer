@@ -1082,10 +1082,12 @@ cardinalities from learned density or representation models
 and benchmark and deployment studies document both their promise and the difficulty of
 robustness across workloads and drift
 \cite{wang2021ready,sun2021designspace,kim2022learnedstudy,han2021cardinality,li2022warper,negi2023robust,li2023alece,wang2023ceda,wang2023ldss,han2024bytecard}.
-These systems output point estimates or estimator state; OASIS instead outputs corrected
-marginal \emph{statistics} that an existing CBO consumes unchanged, and it trains the
-prior on the optimizer's error rather than on cardinality reconstruction---the same
-distinction the ablation draws internally.
+This line remains active in this journal: recent work learns dynamic sample selectors for
+cardinality estimation~\cite{wang2023dynamicsample} and recursive-network models of complex
+predicates~\cite{wang2024recursivepred}. These systems output point estimates or estimator
+state; OASIS instead outputs corrected marginal \emph{statistics} that an existing CBO
+consumes unchanged, and it trains the prior on the optimizer's error rather than on
+cardinality reconstruction, the same distinction the ablation draws internally.
 
 \paragraph{Composition, joins, and plan-level learning.}
 Copula and factorized-join estimators such as FactorJoin~\cite{wu2023factorjoin} combine

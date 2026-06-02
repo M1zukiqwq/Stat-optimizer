@@ -63,42 +63,29 @@
 \address[inst1]{Affiliation Redacted for Review}
 
 \begin{abstract}
-Cost-based optimizers plan with column statistics that grow stale between
-refreshes, and query feedback exposes the resulting selectivity errors. Repairing a
-histogram from this feedback is an underdetermined problem. A handful of observed
-predicates constrain the marginal distribution only where they fall and leave the rest
-of it free, a region we call the feedback nullspace. Classical feedback-consistency
-methods such as STHoles, ISOMER, and QuickSel-H fill this nullspace with an uninformed
-default; ISOMER, for example, uses the maximum-entropy completion. The deployment
-question is then not how to match the feedback more exactly, but what to place in the
-nullspace.
+Cost-based optimizers plan with column statistics that grow stale between refreshes, and
+query feedback exposes the resulting selectivity errors. Repairing a histogram from this
+feedback is underdetermined: a few observed predicates constrain the marginal only where
+they fall and leave the rest free, a region we call the feedback nullspace. Classical
+feedback-consistency methods (STHoles, ISOMER, QuickSel-H) fill it with an
+optimizer-agnostic default---ISOMER, for example, with maximum entropy---so the deployment
+question is not how to match the feedback more exactly, but what to place in the nullspace.
 
 We propose OASIS (Optimizer-Aware Statistics Imputation System), a statistics-layer
 middleware that imputes the nullspace with a completion learned against the optimizer's
-own error. OASIS is organized as three layers: a conversion layer that maps native
-engine statistics to a canonical distribution and back, a learned imputation layer that
-produces a marginal prior, and a calibration layer that projects the prior onto the
-feedback and routes among candidates using a deployment-visible signal. The prior is
-trained on a composite objective combining held-out future-predicate error, a join-regret
-term, feedback consistency, and a reconstruction regularizer, so that it reproduces the
-optimizer's behavior rather than the post-drift histogram. A rank analysis explains when
-the learned imputation helps: it improves accuracy in proportion to the nullspace the
-feedback leaves, and it reduces to the maximum-entropy default once dense feedback pins
+own error. OASIS has three layers: a conversion layer between native statistics and a
+canonical distribution, a learned imputation layer that produces a marginal prior from a
+composite objective (future-predicate error, join regret, feedback consistency, and
+reconstruction), and a calibration layer that projects the prior onto the feedback and
+routes among candidates from a deployment-visible signal. A rank analysis shows the gain
+is proportional to the nullspace the feedback leaves and vanishes once dense feedback pins
 the marginal.
 
-On held-out single-column drift, OASIS lowers future-predicate Q-error by $12.8\%$ over
-ISOMER and also beats the self-tuning histograms STHoles and QuickSel-H (by $6.1\%$ and
-$5.7\%$), with the gain reaching $21\%$ on predicates farthest from feedback. A
-prior-source swap shows the calibration layer is estimator-agnostic. The corrected
-marginal stays safe downstream: it improves every member of a six-estimator composition
-family by $20$--$36\%$, repairs a FactorJoin join kernel on which an uncalibrated prior
-is harmful, and in a 12-configuration PostgreSQL planner study cuts row-estimation Q-error
-from $27.7$ to $2.4$ and new plan deviations from $2.3\%$ to $1.1\%$, with the largest
-gap over ISOMER at sparse feedback ($5.2\times$ lower row Q-error at a two-predicate
-window). On a three-seed TPC-H SF10 study, the calibrated statistics match
-fresh-statistics accuracy and plans without a table scan, reproducing the fresh-statistics
-runtime to within $1.4\times$ in the worst case; this is a deployment sanity check, not a
-claim of runtime improvement over leaving statistics stale.
+On held-out drift, OASIS cuts future-predicate Q-error by $12.8\%$ over ISOMER and also
+beats STHoles and QuickSel-H, with a $5.2\times$ advantage at sparse feedback on a real
+PostgreSQL planner. It improves a six-estimator composition family by $20$--$36\%$,
+repairs a FactorJoin kernel on which an uncalibrated prior is harmful, and on TPC-H
+reproduces fresh-statistics plans and accuracy without a table scan.
 \end{abstract}
 
 \begin{keyword}
@@ -133,7 +120,7 @@ into statistics updates---STHoles, SASH, and ISOMER are the canonical examples
 \cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}---and
 ISOMER in particular makes the underlying principle explicit: among all marginals
 consistent with the observed feedback, choose the \emph{maximum-entropy} one. This
-is a principled but uninformed choice: the least-committed completion of the part of
+is a principled but optimizer-agnostic choice: the least-committed completion of the part of
 the marginal that feedback does not determine.
 
 \paragraph{Feedback repair is an underdetermined inverse problem.}
@@ -305,18 +292,19 @@ solution must avoid table rescans (deriving $\hat{H}$ from $H_0$ and feedback on
 run near planning time, and degrade gracefully when feedback is sparse.
 
 The structure that drives this paper is a dimension count, which we state in the
-representation where the constraints are exactly linear. Fix the interval partition
-induced by the active feedback boundaries together with the $B$-bucket grid, and write the
-marginal as its vector of cell masses $m\in\Delta$, where $\Delta$ is the probability
-simplex over the cells (so $\dim\Delta = B-1$ for the equi-depth grid). In this
-\emph{bucket-mass representation} each feedback observation $o_j$ constrains a \emph{sum} of
-cell masses---the mass on its predicate interval equals the observed selectivity (two such
-sums for a \texttt{BETWEEN})---so the window imposes a system of linear equality
-constraints $A m = y$. Let $r=\mathrm{rank}(A)$. The marginals consistent with the feedback
-form the affine slice $\{m\in\Delta : A m = y\}$, of free dimension $\dim\Delta - r$; we
-call this free part the \emph{nullspace} the feedback leaves. The quantile boundaries a
-histogram exposes are recovered from $m$ by inverting the implied CDF, a one-to-one map for
-a fixed grid.
+representation where the constraints are exactly linear. Fix the $B$-bucket grid and write
+the marginal as its vector of $B$ cell masses $m\in\Delta$, where $\Delta$ is the
+probability simplex (so $\dim\Delta = B-1$). In this \emph{bucket-mass representation} a
+feedback observation $o_j$ constrains the total mass on its predicate interval, which is a
+sum of these cell masses---with a fractional coefficient on the boundary cell when a
+predicate value falls inside a bucket, under the piecewise-linear CDF (two such sums for a
+\texttt{BETWEEN}). The window therefore imposes a system of linear equality constraints
+$A m = y$ with $A\in\mathbb{R}^{K'\times B}$. Let $r=\mathrm{rank}(A)\le B-1$. The marginals
+consistent with the feedback form the affine slice $\{m\in\Delta : A m = y\}$, of free
+dimension $(B-1)-r$; we call this free part the \emph{nullspace} the feedback leaves. The
+rank sweep in Section~\ref{sec:mechanism} reports this effective rank on the $B-1$ histogram
+degrees of freedom. The quantile boundaries a histogram exposes are recovered from $m$ by
+inverting the implied CDF, a one-to-one map for a fixed grid.
 
 \begin{proposition}[Pinned regime]
 \label{prop:pinned}
@@ -1020,38 +1008,40 @@ turn to next.
 
 \paragraph{Sparse feedback on the real planner.}
 The 12-configuration batch above uses the standard dense window ($K{=}16$). To show the
-nullspace effect where it is sharpest, we re-run the same injection pipeline while varying
-the feedback budget $K$, over three drift configurations
-(Table~\ref{tab:postgres_sparse_sweep}). At $K{=}2$ the maximum-entropy projection
-collapses on the planner queries: ISOMER's aggregate row Q-error is $10.13$ and it matches
-the fresh-statistics plan on only $63\%$ of queries, because two constraints leave its
-completion far from the truth on the queried ranges. The learned completion holds at row
-Q-error $1.96$ (Router $1.95$) and a $94\%$ fresh-plan match---a $5.2\times$ accuracy gap
-on a real optimizer, not a proxy. As feedback densifies the constraints pin the marginal
-and the gap closes: by $K{=}8$ the two are within $3\%$, and at $K{=}16$ they tie
-($1.51$ vs $1.53$), recovering the dense-batch result above. This is the deployment
-knife-edge the paper's central claim predicts: on the planner, the learned imputation
-matters most exactly when feedback is too sparse to pin the statistics, and it costs
-nothing when feedback is dense.
+nullspace effect where it is sharpest, we drill down into one representative planner
+configuration (left-shift drift, a 40K-row fact table, 84 queries) and vary the feedback
+budget $K$ (Table~\ref{tab:postgres_sparse_sweep}). At $K{=}2$ the maximum-entropy
+projection collapses on the planner queries: ISOMER's aggregate row Q-error is $10.12$, it
+matches the fresh-statistics plan on only $63\%$ of queries, and it introduces new plan
+deviations on $14.3\%$ of them, because two constraints leave its completion far from the
+truth on the queried ranges. The learned completion holds at row Q-error $1.96$
+(Router $1.95$), a $94\%$ fresh-plan match, and \emph{zero} new deviations---a $5.2\times$
+accuracy gap on a real optimizer, not a proxy. As feedback densifies the constraints pin
+the marginal and the gap closes: by $K{=}8$ the two are within $3\%$, and at $K{=}16$ they
+tie ($1.51$ vs $1.53$), recovering the dense-batch result above. This drill-down is the
+deployment knife-edge the paper's central claim predicts: on the planner, the learned
+imputation matters most when feedback is too sparse to pin the statistics, and it does not
+materially regress when feedback is dense.
 
 \begin{table}[t]
   \centering\small
   \caption{PostgreSQL planner-only injection under \emph{sparse} feedback: aggregate
-  estimated-row Q-error as the feedback budget $K$ varies (means over three drift
-  configurations; same \texttt{pg\_statistic} path as
-  Table~\ref{tab:postgres_planner_stats_injection_batch}). At $K{=}2$ the maximum-entropy
-  projection (ISOMER) collapses while the learned completion (OASIS) and the Router hold;
-  the methods converge as feedback densifies. Lower is better.}
+  estimated-row Q-error as the feedback budget $K$ varies, for one representative planner
+  configuration (left-shift drift, a 40K-row fact table, 84 queries per method; same
+  \texttt{pg\_statistic} path as Table~\ref{tab:postgres_planner_stats_injection_batch}).
+  At $K{=}2$ the maximum-entropy projection (ISOMER) collapses while the learned completion
+  (OASIS) and the Router hold; the methods converge as feedback densifies. Lower is
+  better.}
   \label{tab:postgres_sparse_sweep}
   \setlength{\tabcolsep}{7pt}
   \begin{tabular}{r rrrrr}
     \toprule
     $K$ & Stale & ISOMER & OASIS & Router & Fresh \\
     \midrule
-    2  & 27.9 & 10.13 & \textbf{1.96} & 1.95 & 1.17 \\
+    2  & 27.9 & 10.12 & \textbf{1.96} & 1.95 & 1.17 \\
     4  & 28.1 & 1.72  & \textbf{1.56} & 1.56 & 1.16 \\
     6  & 28.0 & 1.82  & \textbf{1.54} & 1.52 & 1.16 \\
-    8  & 27.7 & 1.57  & 1.52 & 1.52 & 1.16 \\
+    8  & 27.7 & 1.57  & \textbf{1.51} & 1.52 & 1.16 \\
     16 & 28.0 & \textbf{1.51} & 1.53 & 1.52 & 1.17 \\
     \bottomrule
   \end{tabular}
@@ -1156,7 +1146,7 @@ execution-feedback frameworks repair optimizer state over
 time~\cite{chaudhuri2008paygo}. OASIS shares this statistics-facing target but takes a
 different position: ISOMER's maximum-entropy projection is a
 \emph{completion} of the feedback-underdetermined marginal, and we replace the
-uninformed completion with one trained against downstream optimizer error, bounded by a
+optimizer-agnostic completion with one trained against downstream optimizer error, bounded by a
 rank analysis of when any completion can help. This is, to our knowledge, the first
 account of feedback-driven repair as an underdetermined inverse problem with an explicit
 nullspace characterization.
@@ -1205,9 +1195,11 @@ necessary. The TPC-H check shows only that calibrated statistics reproduce
 fresh-statistics execution time on one schema and six queries; runtime in general depends
 on executor behavior, caching, physical design, and cost-model calibration, and a stale
 mis-estimate can yield a coincidentally faster plan. Finally, the Router gates on feedback
-residual, a proxy for estimate quality rather than plan-shape risk: on the PostgreSQL
-subset it prefers ISOMER and inherits its slightly higher new-deviation rate, even though
-it never routes to Soft there. A plan-shape-aware gate is left to future work.
+residual, which is a proxy for estimate quality rather than for plan-shape risk: it selects
+ISOMER on the dense planner configurations, where ISOMER, OASIS, and the Router all sit near
+the same $\approx 1\%$ new-deviation rate (Table~\ref{tab:postgres_planner_stats_injection_batch}),
+so it does not regress there; but the residual would not by itself flag a plan-shape
+regression if one arose. A plan-shape-aware gate is left to future work.
 
 \section{Conclusion}
 \label{sec:conclusion}

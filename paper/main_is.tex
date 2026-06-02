@@ -93,9 +93,12 @@ prior-source swap shows the calibration layer is estimator-agnostic. The correct
 marginal stays safe downstream: it improves every member of a six-estimator composition
 family by $20$--$36\%$, repairs a FactorJoin join kernel on which an uncalibrated prior
 is harmful, and in a 12-configuration PostgreSQL planner study cuts row-estimation Q-error
-from $27.7$ to $2.4$ and new plan deviations from $2.3\%$ to $1.1\%$. On a three-seed
-TPC-H SF10 study, the calibrated statistics reproduce fresh-statistics accuracy and
-runtime without a table scan.
+from $27.7$ to $2.4$ and new plan deviations from $2.3\%$ to $1.1\%$, with the largest
+gap over ISOMER at sparse feedback ($5.2\times$ lower row Q-error at a two-predicate
+window). On a three-seed TPC-H SF10 study, the calibrated statistics match
+fresh-statistics accuracy and plans without a table scan, reproducing the fresh-statistics
+runtime to within $1.4\times$ in the worst case; this is a deployment sanity check, not a
+claim of runtime improvement over leaving statistics stale.
 \end{abstract}
 
 \begin{keyword}
@@ -301,22 +304,29 @@ the expectation taken over future predicates from the workload distribution. The
 solution must avoid table rescans (deriving $\hat{H}$ from $H_0$ and feedback only),
 run near planning time, and degrade gracefully when feedback is sparse.
 
-The structure that drives this paper is the dimension count. Writing the marginal as
-its $B-1$ free interior boundaries, each feedback observation $o_j$ fixes the CDF at
-its boundary value(s)---one independent linear constraint per distinct interior
-boundary (two for a \texttt{BETWEEN}). Let $r=\mathrm{rank}(\mathcal{O})$ be the
-number of independent constraints the window imposes, capped at $B-1$. A
-feedback-consistency repair is any $\hat{H}$ satisfying all $r$ constraints; the
-solution set is an affine subspace of dimension $(B-1)-r$, the \emph{nullspace} left
-by feedback.
+The structure that drives this paper is a dimension count, which we state in the
+representation where the constraints are exactly linear. Fix the interval partition
+induced by the active feedback boundaries together with the $B$-bucket grid, and write the
+marginal as its vector of cell masses $m\in\Delta$, where $\Delta$ is the probability
+simplex over the cells (so $\dim\Delta = B-1$ for the equi-depth grid). In this
+\emph{bucket-mass representation} each feedback observation $o_j$ constrains a \emph{sum} of
+cell masses---the mass on its predicate interval equals the observed selectivity (two such
+sums for a \texttt{BETWEEN})---so the window imposes a system of linear equality
+constraints $A m = y$. Let $r=\mathrm{rank}(A)$. The marginals consistent with the feedback
+form the affine slice $\{m\in\Delta : A m = y\}$, of free dimension $\dim\Delta - r$; we
+call this free part the \emph{nullspace} the feedback leaves. The quantile boundaries a
+histogram exposes are recovered from $m$ by inverting the implied CDF, a one-to-one map for
+a fixed grid.
 
 \begin{proposition}[Pinned regime]
 \label{prop:pinned}
-If the feedback window has full rank $r=B-1$, the feedback-consistency polytope is a
-single point: every method that satisfies the constraints---ISOMER, STHoles,
-QuickSel-H, and the projection of any prior---returns the same marginal. A prior can
-differ from the maximum-entropy completion only on the $(B-1)-r$ free degrees of
-freedom.
+Fix the bucket-mass representation above and assume the feedback is consistent and
+noise-free, and that every method enforces it through the same linear constraints
+$A m = y$. If those constraints identify the marginal within this representation
+(full rank, $r = \dim\Delta$), then the consistent set $\{m\in\Delta : A m = y\}$ is a
+single point, and ISOMER, STHoles, QuickSel-H, and the projection of any prior all return
+the same marginal. A prior can differ from the maximum-entropy completion only on the
+nullspace of $A$, of dimension $\dim\Delta - r$.
 \end{proposition}
 
 Proposition~\ref{prop:pinned} is simple but central: the entire opportunity for a
@@ -516,14 +526,28 @@ the ablation (Section~\ref{sec:ablation}), do not build the contribution on it.
 \subsubsection{The residual-gated Router.}
 No single operator dominates: hard projection is safest on joins and the planner, the
 learned completion wins on sparse single-column feedback. The Router selects, per case,
-the candidate with the lowest \emph{in-window feedback residual}---a deployment-visible
-signal that never observes test predicates, true cardinalities, runtimes, or plan
-shapes. Because the gate minimizes residual over a pool
-that contains the hard projection, it cannot increase the in-window residual relative
-to that pool; what this buys is a safe fallback wherever the learned completion
-over-extrapolates. Its per-budget choices follow the rank mechanism directly: it
-selects the learned completion where free degrees of freedom exist and reverts to
-ISOMER once the marginal is pinned.
+the candidate with the lowest \emph{in-window feedback residual}, the mean absolute
+discrepancy between a candidate's estimate and the observed selectivity computed over the
+\emph{full} recent observation window.
+
+This signal discriminates among candidates for two reasons, even though hard projection
+matches its active constraints exactly. First, the pool is not uniformly exact-matching:
+it includes the stale histogram and the raw prior (OASIS-noProj), which apply no
+projection and therefore leave a large residual, and the consistency-gated Soft candidate,
+which matches only approximately; the residual separates these from the projected
+candidates cleanly. Second, the projection enforces only the \emph{consistent active
+subset} of constraints---under sequential drift the stale-feedback filter drops the oldest
+constraints when the active set becomes inconsistent (Section~\ref{sec:stage2})---so the
+full-window residual still measures how well each candidate fits the constraints just
+outside its own enforced set, where ISOMER (seeded from stale) and OASIS (seeded from the
+learned prior) differ. Among two candidates that enforce the same active set the residuals
+are nearly identical and ties are broken deterministically in favor of the safer
+projection. The gate never observes test predicates, true cardinalities, runtimes, or plan
+shapes, so it is non-oracle. Because it minimizes residual over a pool that contains the
+hard projection, it cannot increase the in-window residual relative to that pool; what this
+buys is a safe fallback wherever the learned completion over-extrapolates. Its per-budget
+choices follow the rank mechanism: it selects the learned completion where free degrees of
+freedom exist and reverts to ISOMER once the marginal is pinned.
 
 \section{When Does Learning Help? A Rank Characterization}
 \label{sec:mechanism}
@@ -594,7 +618,11 @@ evaluated on held-out drift intensities $q\in\{1,3,5,10,15,20,25,30\}$. All
 feedback-driven methods consume the same observation budget $K{=}16$ and emit
 corrected quantiles on the same $B{=}10$ grid. We compare against the stale prior,
 STHoles~\cite{bruno2001stholes}, ISOMER~\cite{markl2007consistent}, and
-QuickSel-H~\cite{park2020quicksel}. Every method starts from the \emph{same} stale
+QuickSel-H~\cite{park2020quicksel}, and against a recent learned query-driven baseline,
+LQM, which fits a monotone sigmoid-basis network to the same feedback window online, in
+the style of learned query-driven estimators~\cite{kipf2019learned,li2023alece} but
+restricted to the single-column statistics-repair setting and the same no-rescan inputs.
+Every method starts from the \emph{same} stale
 statistics, sees the \emph{same} feedback window, is projected onto the \emph{same}
 constraints, and is evaluated on the \emph{same} held-out split; no method receives
 oracle access, and ``fresh'' is computed from the post-drift data only as an accuracy
@@ -749,13 +777,14 @@ a finite window leaves residual nullspace at every budget.
 
 Table~\ref{tab:feedback_budget_sensitivity} shows the learned completion beats ISOMER at
 \emph{every} budget: $+4.3\%$ at $K{=}2$ ($1.994$ versus $2.083$), $+6.8\%$ at $K{=}4$,
-$+12.1\%$ at $K{=}8$, and $+15.7\%$ at $K{=}16$ ($1.402$ versus $1.664$). The advantage
-does not shrink with $K$---a richer window gives the prior more context to complete the
-\emph{residual} nullspace, so the completion improves faster than the maximum-entropy
-default. The budget at which the two must coincide is therefore not a function of $K$
-alone but of constraint saturation: it is the dense planner regime
-(Section~\ref{sec:postgres-planner}), where the feedback spans the queried constraints
-and pins the marginal. This is also why the gain concentrates spatially in the nullspace
+$+12.1\%$ at $K{=}8$, and $+15.7\%$ at $K{=}16$ ($1.402$ versus $1.664$). On this proxy
+surface ISOMER degrades gracefully as feedback thins, so the relative gap stays modest at
+every budget. On the real PostgreSQL planner the maximum-entropy completion instead fails
+sharply at sparse feedback, and there the gap is largest---a $5.2\times$ row-Q-error
+difference at $K{=}2$ (Table~\ref{tab:postgres_sparse_sweep}). The two pictures agree on
+the mechanism: the learned completion earns its advantage wherever feedback under-determines
+the marginal, and the methods converge only when dense feedback saturates the constraints
+and pins it. This is also why the gain concentrates spatially in the nullspace
 (Table~\ref{tab:feedback_locality}) rather than at any particular budget.
 
 \subsection{The Gain Is the Objective, Not In-Loop Calibration}
@@ -782,7 +811,7 @@ the strongest classical prior (STHoles) at three feedback budgets.
     \toprule
     Stage-1 objective variant & $K{=}2$ & $K{=}6$ & $K{=}16$ \\
     \midrule
-    Reconstruction-only (old objective) & $-1.2$ & $-1.9$ & $-7.8$ \\
+    Histogram reconstruction only & $-1.2$ & $-1.9$ & $-7.8$ \\
     Future-loss only (in-loop proj.)    & $+8.8$ & $+7.0$ & $+0.5$ \\
     \;\;+ FactorJoin regret             & $+8.0$ & $+5.9$ & $-0.0$ \\
     \;\;+ feedback residual             & $+9.8$ & $+7.4$ & $+3.4$ \\
@@ -981,8 +1010,47 @@ constraints (Section~\ref{sec:mechanism}), so hard projection converges to nearl
 same marginal whichever prior seeds it, and the Router selects ISOMER on all twelve
 configurations. The planner is the regime where the \emph{completion operator}, not the
 prior, does the work; the learned prior's advantage instead appears where the feedback
-leaves a nullspace (Sections~\ref{sec:projection-init}--\ref{sec:budget}). This split is
-consistent with the paper's central claim and is expected rather than a weakness.
+leaves a nullspace, which on this same planner is the \emph{sparse}-feedback regime we
+turn to next.
+
+\paragraph{Sparse feedback on the real planner.}
+The 12-configuration batch above uses the standard dense window ($K{=}16$). To show the
+nullspace effect where it is sharpest, we re-run the same injection pipeline while varying
+the feedback budget $K$, over three drift configurations
+(Table~\ref{tab:postgres_sparse_sweep}). At $K{=}2$ the maximum-entropy projection
+collapses on the planner queries: ISOMER's aggregate row Q-error is $10.13$ and it matches
+the fresh-statistics plan on only $63\%$ of queries, because two constraints leave its
+completion far from the truth on the queried ranges. The learned completion holds at row
+Q-error $1.96$ (Router $1.95$) and a $94\%$ fresh-plan match---a $5.2\times$ accuracy gap
+on a real optimizer, not a proxy. As feedback densifies the constraints pin the marginal
+and the gap closes: by $K{=}8$ the two are within $3\%$, and at $K{=}16$ they tie
+($1.51$ vs $1.53$), recovering the dense-batch result above. This is the deployment
+knife-edge the paper's central claim predicts: on the planner, the learned imputation
+matters most exactly when feedback is too sparse to pin the statistics, and it costs
+nothing when feedback is dense.
+
+\begin{table}[t]
+  \centering\small
+  \caption{PostgreSQL planner-only injection under \emph{sparse} feedback: aggregate
+  estimated-row Q-error as the feedback budget $K$ varies (means over three drift
+  configurations; same \texttt{pg\_statistic} path as
+  Table~\ref{tab:postgres_planner_stats_injection_batch}). At $K{=}2$ the maximum-entropy
+  projection (ISOMER) collapses while the learned completion (OASIS) and the Router hold;
+  the methods converge as feedback densifies. Lower is better.}
+  \label{tab:postgres_sparse_sweep}
+  \setlength{\tabcolsep}{7pt}
+  \begin{tabular}{r rrrrr}
+    \toprule
+    $K$ & Stale & ISOMER & OASIS & Router & Fresh \\
+    \midrule
+    2  & 27.9 & 10.13 & \textbf{1.96} & 1.95 & 1.17 \\
+    4  & 28.1 & 1.72  & \textbf{1.56} & 1.56 & 1.16 \\
+    6  & 28.0 & 1.82  & \textbf{1.54} & 1.52 & 1.16 \\
+    8  & 27.7 & 1.57  & 1.52 & 1.52 & 1.16 \\
+    16 & 28.0 & \textbf{1.51} & 1.53 & 1.52 & 1.17 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \subsection{TPC-H DML-Drift Runtime Sanity Check}
 \label{sec:tpch-runtime}
@@ -1017,6 +1085,19 @@ $1.56\times$ slower than fresh. The deployment-relevant invariant is that calibr
 statistics track fresh statistics in both accuracy and runtime, while stale statistics
 make the wall-clock outcome unpredictable in either direction. This is a single-schema
 check on six queries; we draw no broader runtime-superiority conclusion.
+
+\paragraph{Tail safety.}
+Because a median or geomean can hide a bad tail, we report the runtime distribution against
+the deployment target, fresh statistics, over all 18 query instances (six queries, three
+seeds). Calibrated statistics induce the fresh plan on every instance---\emph{zero} plan
+deviations from fresh for OASIS, the Router, and ISOMER---so there is no plan-shape tail.
+The runtime-to-fresh ratio stays tight: median $0.96$ and worst-case $1.23$ for OASIS,
+median $1.00$ and worst-case $1.40$ for the Router. The only large ratio appears against
+\emph{stale}, on the single query (TPC-H Q14) whose plan changes stale$\to$fresh: under
+stale's coincidentally cheap plan it runs about $13\times$ faster, but fresh statistics show
+the same $\approx 13\times$ gap, so this is the cost of switching to the correct plan, not a
+regression introduced by calibration. No calibrated method is slower than fresh by more than
+$1.4\times$ on any query or seed.
 
 \subsection{The Optimizer-Decision Proxy and Feedback Robustness}
 \label{sec:proxy}

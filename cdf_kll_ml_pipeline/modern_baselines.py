@@ -768,3 +768,94 @@ def correct_band_isomer(
         fitted_boundaries = boundaries
 
     return _isomer_quantiles_from_cells(fitted_boundaries, fitted_probs, num_buckets=num_buckets)
+
+
+def correct_neural_qd(
+    prior_min: float,
+    prior_max: float,
+    prior_quantiles: List[float],
+    observations: List[dict],
+    num_buckets: int = 10,
+    n_components: int = 8,
+    prior_weight: float = 0.2,
+) -> List[float]:
+    """LQM: a learned query-driven monotone-network selectivity baseline.
+
+    Represents the recent learned query-driven line (e.g. MSCN, ALECE) adapted to
+    single-column feedback. A single-hidden-layer monotone CDF
+        F(x) = sum_k softmax(a)_k * sigmoid((x - b_k) / exp(s_k))
+    (a sigmoid-basis network, monotone by construction) is fit *online* to the feedback
+    CDF anchors by Levenberg-Marquardt, regularized toward the stale prior so it degrades
+    gracefully when feedback is sparse. It uses only the same observation window as the
+    other methods and never touches the base data. Corrected quantile boundaries are read
+    back by inverting the fitted CDF. Falls back to the prior if SciPy is unavailable or
+    the fit is ill-posed.
+    """
+    import numpy as np
+    try:
+        from scipy.optimize import least_squares
+    except Exception:
+        return prior_quantiles
+    if prior_max <= prior_min or len(observations) < 2:
+        return prior_quantiles
+    vr = prior_max - prior_min
+
+    def _norm(x):
+        return (np.asarray(x, float) - prior_min) / vr
+
+    xa, ya = [0.0, 1.0], [0.0, 1.0]
+    for obs in observations:
+        pred = obs.get("predicate_type", "<=")
+        v = obs.get("value")
+        act = obs.get("actual_sel")
+        if v is None or act is None:
+            continue
+        if pred in ("<", "<="):
+            c = act
+        elif pred in (">", ">="):
+            c = 1.0 - act
+        else:
+            continue
+        xa.append(float(np.clip(_norm(v), 0.0, 1.0)))
+        ya.append(float(min(0.999, max(0.001, c))))
+    xa = np.asarray(xa)
+    ya = np.asarray(ya)
+    if len(xa) < 4:
+        return prior_quantiles
+
+    pq = np.clip(_norm(np.asarray(sorted(prior_quantiles))), 0.0, 1.0)
+    pl = np.arange(1, num_buckets) / float(num_buckets)
+    K = int(n_components)
+
+    theta0 = np.concatenate([np.linspace(0.05, 0.95, K),
+                             np.full(K, np.log(0.12)),
+                             np.zeros(K)])
+
+    def _F(theta, x):
+        b = theta[:K]
+        s = np.exp(np.clip(theta[K:2 * K], np.log(0.02), np.log(0.6)))
+        a = theta[2 * K:]
+        w = np.exp(a - a.max())
+        w = w / w.sum()
+        z = np.clip((np.asarray(x)[:, None] - b[None, :]) / s[None, :], -30.0, 30.0)
+        return (1.0 / (1.0 + np.exp(-z))) @ w
+
+    def _resid(theta):
+        r = _F(theta, xa) - ya
+        if len(pq) == len(pl):
+            r = np.concatenate([r, np.sqrt(prior_weight) * (_F(theta, pq) - pl)])
+        return r
+
+    try:
+        # trf (not lm) so the solver supports fewer residuals than parameters.
+        theta = least_squares(_resid, theta0, max_nfev=200, method="trf").x
+    except Exception:
+        return prior_quantiles
+
+    grid = np.linspace(0.0, 1.0, 1001)
+    Fg = np.maximum.accumulate(np.clip(_F(theta, grid), 0.0, 1.0))
+    if not np.all(np.isfinite(Fg)) or Fg[-1] <= Fg[0]:
+        return prior_quantiles
+    out = [prior_min + grid[min(int(np.searchsorted(Fg, lv)), len(grid) - 1)] * vr
+           for lv in pl]
+    return sorted(out)

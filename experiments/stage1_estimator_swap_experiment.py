@@ -41,7 +41,7 @@ for _p in (_PIPELINE_DIR, _SCRIPT_DIR):
 from json_histogram_parser import load_feedback_sample
 from mlp_histogram_model_v2 import MlpHistogramModelV2
 from baselines import correct_linear_interp, correct_feedback_avg, correct_stholes_tree
-from modern_baselines import correct_quicksel_h
+from modern_baselines import correct_quicksel_h, correct_neural_qd
 
 import oasis_accuracy_smoke as smoke
 
@@ -53,11 +53,13 @@ BASELINE_ESTIMATORS: Dict[str, Callable] = {
     "feedavg": correct_feedback_avg,
     "stholes": correct_stholes_tree,
     "quicksel_h": correct_quicksel_h,
+    "lqm": correct_neural_qd,
 }
-SOURCE_ORDER = ["stale", "lininterp", "feedavg", "stholes", "quicksel_h", "oasis_mlp"]
+SOURCE_ORDER = ["stale", "lininterp", "feedavg", "stholes", "quicksel_h", "lqm", "oasis_mlp"]
 SOURCE_LABEL = {
     "stale": "Stale prior", "lininterp": "LinInterp", "feedavg": "FeedAvg",
-    "stholes": "STHoles", "quicksel_h": "QuickSel-H", "oasis_mlp": "OASIS MLP",
+    "stholes": "STHoles", "quicksel_h": "QuickSel-H", "lqm": "LQM (learned QD)",
+    "oasis_mlp": "OASIS MLP",
 }
 VARIANTS = ["none", "hard", "router"]
 

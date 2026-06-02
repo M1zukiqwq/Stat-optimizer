@@ -288,18 +288,18 @@ The formal batch covers 12 configurations: two drift directions
 measured.
 
 \begin{itemize}
-  \item Stale statistics produce aggregate row Q-error 27.748 and match the
-        fresh-statistics plan shape on 56.0\% of queries.
-  \item OASIS-noProj reduces row Q-error to 3.306 and recovers 91.7\% of
+  \item Stale statistics produce aggregate row Q-error 27.768 and match the
+        fresh-statistics plan shape on 56.1\% of queries.
+  \item OASIS-noProj reduces row Q-error to 3.703 and recovers 82.2\% of
         stale/fresh plan-shape disagreements, but introduces new plan
-        deviations in 13.8\% of cases where stale statistics already matched
+        deviations in 2.3\% of cases where stale statistics already matched
         fresh.
-  \item OASIS reduces row Q-error to 2.360, matches the fresh-statistics
-        plan shape on 96.1\% of queries, recovers 92.6\% of stale/fresh plan
+  \item OASIS reduces row Q-error to 2.362, matches the fresh-statistics
+        plan shape on 95.9\% of queries, recovers 92.1\% of stale/fresh plan
         disagreements, and reduces new plan deviations to 1.1\%.
   \item Across configurations, OASIS has mean row Q-error
-        $2.375\pm0.275$, close to ISOMER's $2.372\pm0.283$ and below
-        OASIS-noProj's $3.313\pm0.228$.
+        $2.377\pm0.269$, close to ISOMER's $2.390\pm0.286$ and below
+        OASIS-noProj's $3.894\pm1.252$.
 \end{itemize}
 
 This protocol validates the causal chain

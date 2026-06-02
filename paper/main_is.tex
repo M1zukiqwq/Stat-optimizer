@@ -64,41 +64,38 @@
 
 \begin{abstract}
 Cost-based optimizers plan with column statistics that grow stale between
-refreshes, and query feedback exposes the resulting selectivity errors. Repairing
-a histogram from that feedback is an \emph{underdetermined} inverse problem: a
-handful of observed predicates constrain the marginal only along the span of their
-feedback intervals and leave its remaining degrees of freedom---its
-\emph{nullspace}---unpinned. The classical feedback-consistency methods
-(ISOMER and its maximum-entropy projection, STHoles, QuickSel-H) fill that
-nullspace with an uninformed completion. We argue, and show, that the deployment
-question is not how to match feedback more exactly but \emph{what to put in the
-nullspace}, and that the answer must be trained against the optimizer's own error,
-not against histogram reconstruction.
+refreshes, and query feedback exposes the resulting selectivity errors. Repairing a
+histogram from this feedback is an underdetermined problem. A handful of observed
+predicates constrain the marginal distribution only where they fall and leave the rest
+of it free, a region we call the feedback nullspace. Classical feedback-consistency
+methods such as STHoles, ISOMER, and QuickSel-H fill this nullspace with an uninformed
+default; ISOMER, for example, uses the maximum-entropy completion. The deployment
+question is then not how to match the feedback more exactly, but what to place in the
+nullspace.
 
-OASIS trains a compact permutation-invariant prior on a \emph{composite
-optimizer-facing objective}---held-out future-predicate error, a FactorJoin
-join-regret term, feedback consistency, and a light reconstruction
-regularizer---and uses the classical feedback projection only as a safe completion
-operator and a residual-gated router for deployment. A rank analysis of the
-feedback-constraint system characterizes exactly when this helps: the learned
-completion improves accuracy in proportion to the nullspace feedback leaves---most on
-predicates far from any observation---and provably washes out only where feedback
-saturates the constraints and pins the marginal, as in the dense planner regime, where
-OASIS converges to ISOMER. An ablation isolates the gain to the composite objective and
-shows, against a tempting reading, that applying the projection inside the training
-loop is inessential.
+We propose OASIS (Optimizer-Aware Statistics Imputation System), a statistics-layer
+middleware that imputes the nullspace with a completion learned against the optimizer's
+own error. OASIS is organized as three layers: a conversion layer that maps native
+engine statistics to a canonical distribution and back, a learned imputation layer that
+produces a marginal prior, and a calibration layer that projects the prior onto the
+feedback and routes among candidates using a deployment-visible signal. The prior is
+trained on a composite objective combining held-out future-predicate error, a join-regret
+term, feedback consistency, and a reconstruction regularizer, so that it reproduces the
+optimizer's behavior rather than the post-drift histogram. A rank analysis explains when
+the learned imputation helps: it improves accuracy in proportion to the nullspace the
+feedback leaves, and it reduces to the maximum-entropy default once dense feedback pins
+the marginal.
 
-On held-out single-column drift the learned completion cuts future-predicate
-Q-error by $12.8\%$ over ISOMER and beats the self-tuning histograms STHoles and
-QuickSel-H ($+6.1\%$, $+5.7\%$), with the gain rising to $+21\%$ on predicates
-farthest from feedback; a prior-source swap shows the same calibration is
-estimator-agnostic. The corrected marginal stays safe downstream: it improves every
-member of a six-estimator composition family by $20\%$--$36\%$, rescues a FactorJoin
-join kernel where the raw prior is actively harmful, and in a 12-configuration
-PostgreSQL planner study cuts row-estimation Q-error from $27.7$ to $2.4$ and new
-plan deviations from $2.3\%$ to $1.1\%$. On a three-seed TPC-H SF10 refresh-drift
-study, calibrated statistics reproduce fresh-statistics accuracy and runtime
-without the table scan.
+On held-out single-column drift, OASIS lowers future-predicate Q-error by $12.8\%$ over
+ISOMER and also beats the self-tuning histograms STHoles and QuickSel-H (by $6.1\%$ and
+$5.7\%$), with the gain reaching $21\%$ on predicates farthest from feedback. A
+prior-source swap shows the calibration layer is estimator-agnostic. The corrected
+marginal stays safe downstream: it improves every member of a six-estimator composition
+family by $20$--$36\%$, repairs a FactorJoin join kernel on which an uncalibrated prior
+is harmful, and in a 12-configuration PostgreSQL planner study cuts row-estimation Q-error
+from $27.7$ to $2.4$ and new plan deviations from $2.3\%$ to $1.1\%$. On a three-seed
+TPC-H SF10 study, the calibrated statistics reproduce fresh-statistics accuracy and
+runtime without a table scan.
 \end{abstract}
 
 \begin{keyword}
@@ -133,8 +130,8 @@ into statistics updates---STHoles, SASH, and ISOMER are the canonical examples
 \cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}---and
 ISOMER in particular makes the underlying principle explicit: among all marginals
 consistent with the observed feedback, choose the \emph{maximum-entropy} one. This
-is a principled default, but it is exactly a default. It is the least-committed
-completion of the part of the marginal that feedback does not determine.
+is a principled but uninformed choice: the least-committed completion of the part of
+the marginal that feedback does not determine.
 
 \paragraph{Feedback repair is an underdetermined inverse problem.}
 The observation that organizes this paper is structural. An equi-depth histogram
@@ -159,40 +156,37 @@ target---does not help either, because reconstruction accuracy is not the same a
 optimizer relevance.
 
 \paragraph{Contribution.}
-OASIS instantiates the optimizer-relevant completion. A compact
-permutation-invariant prior is trained on a \emph{composite optimizer-facing
-objective} that scores the \emph{projected} marginal by its held-out
-future-predicate error, a FactorJoin join-regret term, an in-window
-feedback-consistency residual, and a light reconstruction regularizer. The classical
-feedback projection is reused only as a safe completion operator over an arbitrary
-prior and, at deployment, as a residual-gated router that selects between the
-learned completion and the maximum-entropy default using a signal the system already
-has. Three findings make the story precise and honest:
+We propose OASIS (Optimizer-Aware Statistics Imputation System), which imputes the
+feedback nullspace with a learned, optimizer-relevant completion. OASIS is organized as
+three layers. A \emph{conversion layer} maps native engine statistics to a canonical
+distribution view and back (Section~\ref{sec:mcv-adapter}). A \emph{learned imputation
+layer} produces a marginal prior from a compact permutation-invariant model trained on a
+composite objective that scores the projected marginal by its held-out future-predicate
+error, a FactorJoin join-regret term, an in-window feedback-consistency residual, and a
+reconstruction regularizer (Section~\ref{sec:stage1}). A \emph{calibration layer} reuses
+the classical feedback projection as a completion operator over any prior and adds a
+residual-gated router that selects between the learned completion and the maximum-entropy
+default from a deployment-visible signal (Section~\ref{sec:stage2}). Three findings
+support the design.
 
 \begin{itemize}
-  \item \textbf{The gain is the objective, not the calibration trick.} An ablation
-        holding data, capacity, and projection fixed shows that a
-        reconstruction-only prior \emph{fails} (it is worse than the classical
-        priors at every feedback budget), the composite objective is what produces
-        the gain, and applying the projection \emph{inside the training loop} is
-        inessential---post-hoc projection performs identically
-        (Section~\ref{sec:ablation}). We therefore do not claim
-        ``calibration-in-the-loop'' as the contribution; the contribution is the
-        objective.
-  \item \textbf{A rank characterization of when learning helps.} The improvement is
-        governed by the nullspace feedback leaves. \emph{Spatially}, it concentrates
-        on predicates far from any observation ($+21\%$ versus $+9\%$ near feedback);
-        it is present from the sparsest feedback ($+4.3\%$ over ISOMER at $K{=}2$) and
-        persists across feedback budgets; and it collapses to a tie only where
-        feedback \emph{saturates} the constraints and pins the marginal---the dense
-        planner regime---where OASIS provably equals ISOMER
-        (Section~\ref{sec:mechanism}). This boundary is the mechanism that predicts the
-        method's reach, not a weakness to hide.
-  \item \textbf{Optimizer safety from the same operator.} Because a raw learned
-        completion can over-extrapolate where it is not pinned---harmful in a
-        bilinear join kernel and on a real append trace---the projection and a
-        residual-gated router are what make imperfect marginals safe to compose,
-        join, and inject into a planner, without ever consulting an oracle.
+  \item The gain comes from the training objective rather than from calibration in the
+        loop. An ablation that holds data, capacity, and projection fixed shows a
+        reconstruction-only prior is worse than the classical priors at every feedback
+        budget, whereas the composite objective produces the gain. Applying the
+        projection inside the training loop is not necessary, because post-hoc projection
+        performs identically (Section~\ref{sec:ablation}).
+  \item A rank analysis characterizes when learning helps. The improvement is governed by
+        the nullspace the feedback leaves. It concentrates on predicates far from any
+        observation ($21\%$ versus $9\%$ near feedback), is already present at the
+        sparsest feedback ($4.3\%$ over ISOMER at $K{=}2$), and reduces to a tie only
+        where dense feedback saturates the constraints and pins the marginal, as in the
+        planner regime (Section~\ref{sec:mechanism}).
+  \item The projection and router supply optimizer safety. A raw learned completion can
+        over-extrapolate where the feedback does not pin it, which is harmful in a
+        bilinear join kernel and on a real append trace. Projecting onto the feedback and
+        routing on a deployment-visible residual make an imperfect prior safe to compose,
+        join, and inject into a planner (Section~\ref{sec:optimizer-facing}).
 \end{itemize}
 
 \paragraph{Scope of the evaluation.}
@@ -293,8 +287,8 @@ differ from the maximum-entropy completion only on the $(B-1)-r$ free degrees of
 freedom.
 \end{proposition}
 
-Proposition~\ref{prop:pinned} is elementary, but it is the load-bearing fact: it
-says the entire opportunity for a learned prior lives in the nullspace, and that the
+Proposition~\ref{prop:pinned} is simple but central: the entire opportunity for a
+learned prior lives in the nullspace, and the
 opportunity vanishes continuously as feedback saturates the constraints. ISOMER
 fills the nullspace with maximum entropy~\cite{markl2007consistent}; STHoles and
 QuickSel-H fill it with their own structural assumptions. The question OASIS answers
@@ -398,11 +392,11 @@ Section~\ref{sec:ablation} shows that the reconstruction and consistency
 regularizers, not the optimizer terms alone, are what keep the dense-feedback regime
 from collapsing.
 
-Two properties of this objective deserve emphasis because they cut against simpler
-readings. The projection $\Pi$ appears inside the loss, which invites the
-interpretation that ``calibration in the loop'' is the mechanism; the ablation
-refutes this, showing post-hoc projection ties in-loop projection exactly. And the
-reconstruction term is only a regularizer; a model trained on reconstruction
+Two properties of this objective are worth noting. The projection $\Pi$ appears inside
+the loss, which might suggest that ``calibration in the loop'' is the mechanism; the
+ablation in Section~\ref{sec:ablation} shows otherwise, as post-hoc projection performs
+as well as in-loop projection. The reconstruction term is only a regularizer; a model
+trained on reconstruction
 \emph{alone} is worse than the classical priors. The prior is trained offline and
 reused across columns without per-table retuning.
 
@@ -569,8 +563,8 @@ beats the classical self-tuning histograms, by $6.1\%$ over STHoles ($1.415$) an
 $5.7\%$ over QuickSel-H ($1.407$). The advantage grows with drift, reaching
 $+15.2\%$, $+22.2\%$, and $+19.6\%$ over ISOMER at $q{=}10$, $20$, and $30$, and the
 fresh-initialized lower bound ($1.151$) confirms headroom remains. That the learned
-completion beats two strong classical completions on the \emph{same} projection is
-the point: the gain is in what fills the nullspace, not in matching feedback.
+completion beats two strong classical completions under the \emph{same} projection
+shows that the gain is in what fills the nullspace, not in how the feedback is matched.
 
 \subsection{The Gain Lives in the Nullspace}
 \label{sec:locality}
@@ -615,10 +609,10 @@ nearest feedback endpoint in fresh-CDF space.
 Table~\ref{tab:feedback_locality} and Figure~\ref{fig:feedback_locality} confirm the
 prediction. Near feedback (distance $\leq 0.05$), where the projection already pins the
 marginal, OASIS beats ISOMER by $9.1\%$; in the mid band by $14.5\%$; and far from any
-feedback ($>0.15$), squarely in the nullspace, by $21.2\%$. The improvement is monotone in distance-from-feedback,
-which is the spatial signature of a completion: the constraints determine the marginal
-near the observations, and the learned prior earns its advantage precisely where they
-do not.
+feedback ($>0.15$), inside the nullspace, by $21.2\%$. The improvement grows
+monotonically with distance from feedback, which is the spatial signature of a
+completion: the constraints determine the marginal near the observations, and the learned
+prior earns its advantage where they do not.
 
 \subsection{The Completion Persists Across the Feedback Budget}
 \label{sec:budget}
@@ -674,8 +668,8 @@ the strongest classical prior (STHoles) at three feedback budgets.
   \end{tabular}
 \end{table}
 
-Three conclusions follow, including one that cuts against a tempting narrative. First,
-\emph{reconstruction-only fails at every budget}---training a prior to look like the
+Three conclusions follow. First, reconstruction-only training fails at every budget:
+training a prior to look like the
 post-drift histogram makes it worse than the classical priors, so an optimizer-facing
 objective is necessary. Second, the composite objective creates the gain, and the
 reconstruction and consistency regularizers are essential at dense feedback:
@@ -703,9 +697,9 @@ prior, lowering future-predicate Q-error to a tight $1.39$--$1.44$ band and the
 feedback residual to $0.035$--$0.038$, and the Router is no worse than hard projection
 for \emph{every} source. The learned prior is now also the strongest \emph{raw} input
 ($1.489$, below STHoles $1.572$ and QuickSel-H $1.614$), and it routes to the best
-final value ($1.328$). The reading is the paper's thesis in miniature: the projection
-and router make any imperfect prior safe, while the trained completion is what wins the
-nullspace where it is still open.
+final value ($1.328$). This restates the paper's central claim at the level of one
+experiment: the projection and router make any imperfect prior safe to use, while the
+trained completion is what wins the nullspace where the feedback leaves it open.
 
 \subsection{Out-of-Distribution Drift}
 \label{sec:ood-drift-realism}
@@ -862,9 +856,9 @@ disappointment: these planner-facing windows are dense enough to pin the active
 constraints (Section~\ref{sec:mechanism}), so hard projection converges to nearly the
 same marginal whichever prior seeds it, and the Router selects ISOMER on all twelve
 configurations. The planner is the regime where the \emph{completion operator}, not the
-prior, does the work; the learned prior's advantage instead appears where feedback is
-sparse (Sections~\ref{sec:projection-init}--\ref{sec:budget}). This split is the thesis,
-not a weakness.
+prior, does the work; the learned prior's advantage instead appears where the feedback
+leaves a nullspace (Sections~\ref{sec:projection-init}--\ref{sec:budget}). This split is
+consistent with the paper's central claim and is expected rather than a weakness.
 
 \subsection{TPC-H DML-Drift Runtime Sanity Check}
 \label{sec:tpch-runtime}
@@ -921,7 +915,7 @@ beats the classical priors and ties ISOMER), and under $10\%$ multiplicative fee
 noise the Router degrades gracefully---selectivity Q-error rises only from $1.375$ to
 $1.418$ and join-optimal choices from $92.9\%$ to $92.2\%$, still far below ISOMER
 ($1.758$) and stale ($2.867$). The failure modes are reported, not hidden: the raw
-prior is harmful in FactorJoin and on the NASA trace, which is exactly why the projection
+prior is harmful in FactorJoin and on the NASA trace, which is why the projection
 and residual gating are part of the method.
 
 \section{Overhead and Deployment Considerations}
@@ -950,7 +944,7 @@ refine statistics from observed results
 \cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}, and
 execution-feedback frameworks repair optimizer state over
 time~\cite{chaudhuri2008paygo}. OASIS shares this statistics-facing target but takes a
-different position: ISOMER's maximum-entropy projection is precisely a
+different position: ISOMER's maximum-entropy projection is a
 \emph{completion} of the feedback-underdetermined marginal, and we replace the
 uninformed completion with one trained against downstream optimizer error, bounded by a
 rank analysis of when any completion can help. This is, to our knowledge, the first
@@ -1011,8 +1005,8 @@ rescanning tables or modifying the optimizer. Its organizing idea is that feedba
 repair is an underdetermined inverse problem: feedback pins the marginal only on the span
 of the observed predicates and leaves a nullspace that some completion must fill. The
 classical methods fill it with maximum entropy; OASIS fills it with a completion trained
-on a composite optimizer-facing objective---future-predicate error, join regret,
-feedback consistency, and a reconstruction regularizer---and a rank analysis says exactly
+on a composite optimizer-facing objective (future-predicate error, join regret,
+feedback consistency, and a reconstruction regularizer), and a rank analysis describes
 where this can help. On held-out single-column drift the learned completion cuts
 future-predicate Q-error by $12.8\%$ over ISOMER and beats STHoles and QuickSel-H, with
 the gain rising to $21\%$ on predicates farthest from feedback, present from the sparsest
@@ -1025,8 +1019,8 @@ $20\%$--$36\%$, rescues a FactorJoin kernel where the raw prior is harmful, cuts
 PostgreSQL new plan deviations to $1.1\%$, and on TPC-H reproduces fresh-statistics
 accuracy and runtime without the table scan. OASIS is best understood as a reusable,
 feedback-calibrated statistics layer that learns the optimizer-relevant completion of the
-feedback nullspace and falls back to the maximum-entropy default exactly where the
-nullspace closes.
+feedback nullspace and falls back to the maximum-entropy default where the nullspace
+closes.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{references}

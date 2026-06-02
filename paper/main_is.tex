@@ -848,9 +848,14 @@ and the OASIS prior, on the same cached drift cases and feedback windows.
 Table~\ref{tab:stage1_estimator_swap} shows the projection and router improve every
 prior, lowering future-predicate Q-error to a tight $1.39$--$1.44$ band and the
 feedback residual to $0.035$--$0.038$, and the Router is no worse than hard projection
-for \emph{every} source. The learned prior is now also the strongest \emph{raw} input
-($1.489$, below STHoles $1.572$ and QuickSel-H $1.614$), and it routes to the best
-final value ($1.328$). This restates the paper's central claim at the level of one
+for \emph{every} source, including the recent learned query-driven baseline LQM (raw
+$1.607$, routed $1.425$). The OASIS prior is the strongest \emph{raw} input ($1.489$,
+below STHoles $1.572$, QuickSel-H $1.614$, and LQM $1.607$), and it routes to the best
+final value ($1.328$, versus $1.425$ for LQM and $1.39$--$1.44$ for the others). The
+learned query-driven baseline therefore lands with the classical self-tuning histograms
+rather than with OASIS: fitting a flexible model to the feedback alone is not enough; the
+advantage comes from training the completion against optimizer error
+(Section~\ref{sec:ablation}). This restates the paper's central claim at the level of one
 experiment: the projection and router make any imperfect prior safe to use, while the
 trained completion is what wins the nullspace where the feedback leaves it open.
 

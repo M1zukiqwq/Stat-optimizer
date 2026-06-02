@@ -229,6 +229,38 @@ The contributions are:
 \section{Background and Problem Formulation}
 \label{sec:background}
 
+\subsection{A Deployment Scenario}
+\label{sec:scenario}
+
+Consider an analytical table such as TPC-H \texttt{lineitem} that accumulates inserts
+between scheduled \texttt{ANALYZE} passes. As rows shifted into a new date band arrive,
+the snapshot histogram of \texttt{l\_shipdate} stops covering the current range, so the
+planner mis-estimates date-range predicates and can flip a join order or an
+index-versus-scan choice; queries that touch recent data then regress, sometimes
+sharply. Running \texttt{ANALYZE} would repair the statistics, but it reads a full or
+sampled view of the table and is therefore scheduled rather than continuous. In the
+meantime every executed query is a free measurement: for each filter conjunct the
+optimizer's estimated selectivity and the executor's observed selectivity reveal where
+the snapshot disagrees with the current data. The opportunity OASIS targets is to repair
+the optimizer-facing statistics from this feedback, between refreshes, without a scan.
+
+\subsection{Self-Tuning Histograms: the Framework We Build On}
+\label{sec:framework}
+
+This goal places OASIS in the line of self-tuning histograms, whose design space is
+defined by three systems we also use as baselines. STHoles~\cite{bruno2001stholes} builds
+and refines a histogram directly from query feedback, splitting buckets where the
+observed result contradicts the current estimate. ISOMER~\cite{markl2007consistent} adds
+a consistency principle: among all histograms consistent with the observed feedback it
+selects the maximum-entropy one, and it discards the oldest constraints when drift makes
+the active set inconsistent. QuickSel-H~\cite{park2020quicksel} fits a query-driven model
+to observed selectivities without touching the base data. All three share the interface
+OASIS adopts---feedback in, a corrected single-column statistic out, no rescan---and, as
+Section~\ref{sec:problem} formalizes, all three must \emph{complete} the marginal in the
+region the feedback does not constrain. OASIS keeps this interface and changes the
+completion rule, learning it against optimizer error instead of fixing it by maximum
+entropy or bucket splitting.
+
 \subsection{Column Statistics and the Staleness Gap}
 
 We model a column histogram as an equi-depth quantile summary with $B$ buckets. The
@@ -315,16 +347,54 @@ assumption, not a measured claim about any production system.
 
 \subsection{System Overview}
 
-OASIS sits between the statistics store and the optimizer. When the optimizer
-requests a histogram, OASIS reconstructs a canonical quantile representation,
-retrieves a recent observation window for the column, obtains a marginal prior from
-Stage~1, completes and calibrates it with the Stage~2 projection and router, and
-returns an engine-native statistics object. Execution is unchanged except for
-lightweight per-conjunct feedback collection. Two integration points suffice: a
-query-completion listener that records predicate-level feedback from executor
+OASIS is a middleware that sits at the statistics layer, between the statistics store
+and the optimizer, and is organized as three layers (Figure~\ref{fig:architecture}).
+The \emph{conversion layer} (L1, Section~\ref{sec:mcv-adapter}) maps the engine's native
+statistics object to a canonical one-dimensional CDF view and back, so the rest of the
+system is engine-independent. The \emph{imputation layer} (L2, Section~\ref{sec:stage1})
+produces a marginal prior that completes the feedback nullspace; it is the learned
+component, and we refer to it interchangeably as Stage~1. The \emph{calibration layer}
+(L3, Section~\ref{sec:stage2}) projects the prior onto the active feedback and routes
+among candidate marginals; we refer to it as Stage~2.
+
+When the optimizer requests a histogram, the request passes down through the three
+layers and back: L1 reconstructs the canonical view, L2 supplies the prior from the
+stale view and a recent observation window, L3 calibrates it against the feedback, and
+L1 decomposes the result back into a native statistics object. Two integration points
+suffice: a query-completion listener that records predicate-level feedback from executor
 row counts, and a statistics-assembly hook that substitutes the corrected histogram
 before it reaches the optimizer. Because the correction is inserted at the statistics
-layer, the optimizer's search and cost model are untouched.
+layer, the optimizer's search procedure and cost model are untouched, and the feedback
+collection adds only bounded per-conjunct bookkeeping.
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}[
+      font=\small, >=Stealth, node distance=5.5mm,
+      ext/.style={draw, rounded corners, align=center, minimum height=9mm, inner sep=4pt, fill=gray!8},
+      lyr/.style={draw, rounded corners, align=center, minimum height=13mm, text width=21mm, inner sep=4pt, fill=blue!6},
+    ]
+    \node[ext] (store) {Statistics\\store $H_0$};
+    \node[lyr, right=of store] (conv) {\textbf{L1}\\Conversion\\native\,$\leftrightarrow$\,CDF};
+    \node[lyr, right=of conv] (imp) {\textbf{L2}\\Imputation\\learned prior};
+    \node[lyr, right=of imp] (cal) {\textbf{L3}\\Calibration\\projection\,+\,router};
+    \node[ext, right=of cal] (opt) {Optimizer\\(unchanged)};
+    \draw[->] (store) -- (conv);
+    \draw[->] (conv) -- (imp);
+    \draw[->] (imp) -- (cal);
+    \draw[->] (cal) -- (opt);
+    \node[ext, below=8mm of cal] (exec) {Executor};
+    \draw[->] (opt.south) |- (exec.east);
+    \draw[->] (exec.north) -- node[right, font=\scriptsize]{feedback} (cal.south);
+    \draw[->] (exec.west) -| (imp.south);
+  \end{tikzpicture}
+  \caption{OASIS as a three-layer statistics middleware. A request for a histogram flows
+  through the conversion layer (L1), the learned imputation layer (L2), and the
+  calibration layer (L3), and the native object is returned to an unchanged optimizer.
+  Predicate-level feedback from the executor conditions the imputation and drives the
+  calibration. Only L2 is learned; L1 and L3 are deterministic.}
+  \label{fig:architecture}
+\end{figure}
 
 \paragraph{Naming.}
 \emph{OASIS} names the approach---the learned prior completed by feedback
@@ -348,8 +418,22 @@ object, apply correction on the canonical view, and decompose the corrected view
 back into native fields. The round trip preserves total mass to machine precision
 (residual-quantile MAE mean $2.4\times10^{-17}$, max $9.2\times10^{-17}$), keeps
 selectivity estimates consistent (global MAE $1.1\times10^{-4}$, worst case below
-$0.39\%$), and completes in $0.066$--$0.073$\,ms. Other engines require their own
-adapter logic.
+$0.39\%$), and completes in $0.066$--$0.073$\,ms.
+
+\paragraph{Portability to other engines.}
+Only the conversion layer is engine-specific; the imputation and calibration layers
+operate on the canonical CDF and are unchanged across systems. Porting OASIS to a new
+engine therefore reduces to writing one adapter. The effort depends on how the engine
+exposes single-column statistics. MySQL and MariaDB keep equi-height/equi-width histograms
+in the data dictionary and expose them through \texttt{ANALYZE TABLE \ldots\ UPDATE
+HISTOGRAM} and \texttt{information\_schema}, which maps to the canonical CDF almost
+directly. Microsoft SQL Server stores step-based histograms readable via
+\texttt{DBCC SHOW\_STATISTICS}, again a close fit. Oracle couples height-balanced and
+hybrid histograms with column-level density and is closest to the PostgreSQL case we
+implement, where the adapter must also reconcile a most-common-value list. Engines that do
+not expose an editable histogram object would require correcting statistics through their
+maintenance API rather than in place. We validate the PostgreSQL adapter end-to-end; the
+others are design targets, not claims, but they share the same canonical interface.
 
 \subsection{Stage 1: A Prior Trained on a Composite Optimizer-Facing Objective}
 \label{sec:stage1}
@@ -498,7 +582,7 @@ completion's advantage persists---and even grows---across feedback budgets
 
 The evaluation follows the deployment path of a marginal statistic. We first
 establish the corrected single-column object: the prior carries optimizer-relevant
-drift signal, its advantage is concentrated in the nullspace exactly as
+drift signal, its advantage is concentrated in the nullspace as
 Section~\ref{sec:mechanism} predicts, the gain comes from the composite objective,
 and the same calibration works for non-OASIS priors. We then widen from synthetic
 drift to out-of-distribution families, DML event streams, and a public telemetry
@@ -514,13 +598,53 @@ QuickSel-H~\cite{park2020quicksel}. Every method starts from the \emph{same} sta
 statistics, sees the \emph{same} feedback window, is projected onto the \emph{same}
 constraints, and is evaluated on the \emph{same} held-out split; no method receives
 oracle access, and ``fresh'' is computed from the post-drift data only as an accuracy
-upper bound. Metrics include Q-error, selectivity and quantile MAE, feedback residual,
-PostgreSQL estimated-row Q-error, and plan-shape match to the fresh planner. For
+upper bound. Table~\ref{tab:metrics} defines the metrics used throughout. For
 sensitivity diagnostics we also use a transparent optimizer-decision proxy: future
 predicates are drawn from held-out distributions, each statistics state selects scan
 and join choices under a fixed cost proxy, and the choice is scored by its true proxy
 cost. The proxy analyzes feedback-budget and noise behavior; it is not a runtime
 benchmark.
+
+\begin{table}[t]
+  \centering\small
+  \caption{Evaluation metrics. Direction marks whether lower ($\downarrow$), higher
+  ($\uparrow$), or near-one ($\to 1$) is better. $\hat s,s^\ast$ are estimated and actual
+  selectivity; $p$ is the corrected marginal; $A_j p$ is its mass on feedback interval
+  $j$ with observed value $y_j$.}
+  \label{tab:metrics}
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{l l c}
+    \toprule
+    Metric & Definition & Dir. \\
+    \midrule
+    Q-error & $\max(\hat s/s^\ast,\, s^\ast/\hat s)$, Eq.~\eqref{eq:qerr} & $\downarrow$ \\
+    Selectivity MAE & mean $|\hat s - s^\ast|$ over predicates & $\downarrow$ \\
+    Quantile MAE & mean $|v_i - v_i^{\text{fresh}}|$ over boundaries & $\downarrow$ \\
+    Feedback residual & mean $|A_j p - y_j|$ on the observation window & $\downarrow$ \\
+    Row Q-error & Q-error of \texttt{EXPLAIN} estimated rows vs \texttt{COUNT(*)} & $\downarrow$ \\
+    Fresh-plan match & frac.\ of queries whose plan equals the fresh-stats plan & $\uparrow$ \\
+    Recovery & frac.\ of stale/fresh plan disagreements the method fixes & $\uparrow$ \\
+    New deviations & frac.\ of stale/fresh agreements the method breaks & $\downarrow$ \\
+    Join regret & selected-plan proxy cost $/$ optimal proxy cost & $\downarrow$ \\
+    Time/Fresh & geomean warm-cache runtime ratio to fresh stats & $\to 1$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Drift model and its justification.}
+We do not have access to a production stream of statistics-refresh histories, so we drive
+staleness with controlled drift, chosen to mimic how analytical tables actually evolve
+between \texttt{ANALYZE} passes. The drift intensity $q$ scales how far the post-drift
+distribution moves from the snapshot $H_0$ (in units of inter-quantile shift), so larger
+$q$ corresponds to a longer or more turbulent refresh interval; we sweep
+$q\in\{1,\dots,30\}$ to cover mild to severe staleness. The drift \emph{families}
+(batch loads, range and date-band shifts, skew evolution, outlier bursts, multimodal and
+seasonal mixtures) are the update patterns that workload-evolution and learned-estimator
+drift studies report as the practical causes of estimator degradation
+\cite{li2022warper,negi2023robust,lee2023impact,han2024bytecard}, and the DML traces of
+Section~\ref{sec:traces} reproduce several of them as explicit insert/update/delete
+streams. We treat the drift model as a stated, transparent assumption rather than a
+claim about any single production system.
 
 \section{Single-Column Statistics Correction}
 \label{sec:single-column-results}

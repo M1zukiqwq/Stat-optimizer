@@ -4,52 +4,39 @@
 This appendix collects implementation details trimmed from the main paper for
 page budget reasons.
 
-\subsection{Attention-Pooled MLP Architecture}
+\subsection{Imputation-Layer Architecture}
 
-The OASIS correction model is an \emph{attention-pooled MLP} that exploits
-non-linear interactions between the prior histogram and the observation window.
-The architecture is deliberately lightweight for CPU deployment:
+The imputation layer (Stage~1) is a compact \emph{permutation-invariant set encoder} over
+the stale-quantile and feedback tokens. It is built so the same model consumes any
+feedback-window size and is invariant to observation order:
 
 \begin{enumerate}
-  \item \textbf{Prior encoder}: The stale prior quantiles $\mathbf{v}_{\text{norm}}$
-        are first processed through a dedicated single-layer MLP
-        ($9 \to 32 \xrightarrow{\text{ReLU}} 32$) to extract high-level
-        distributional features before fusion with observations.
-  \item \textbf{Multi-head attention}: Each observation slot $o_i \in \mathbb{R}^{D_{\text{obs}}}$
-        receives $H{=}3$ independent attention scores
-        $a_i^{(h)} = \mathbf{w}_{\text{attn}}^{(h)\top} o_i + b_{\text{attn}}^{(h)}$,
-        one per head $h \in \{1,2,3\}$.
-        Each head's scores are masked (padded slots zeroed) and passed through softmax,
-        yielding $H$ attention weight vectors $\boldsymbol{\alpha}^{(h)} \in \Delta^{K-1}$.
-  \item \textbf{Multi-head pooling}: Each head produces a pooled observation vector
-        $\mathbf{p}^{(h)} = \sum_{i} \alpha_i^{(h)} o_i \in \mathbb{R}^{D_{\text{obs}}}$.
-        The $H$ pooled vectors are concatenated to form a multi-perspective
-        observation summary $\mathbf{p}_{\text{all}} = [\mathbf{p}^{(1)} \;||\; \cdots \;||\; \mathbf{p}^{(H)}]$.
-  \item \textbf{Deep residual MLP}: The context vector
-        $\mathbf{c} = [\mathbf{v}_{\text{enc}} \;||\; \mathbf{m} \;||\; \mathbf{p}_{\text{all}}]$
-        (encoded prior $\|$ meta $\|$ multi-head pooled observations)
-        is fed into a four-hidden-layer MLP with skip connections:
-        $\mathbf{c} \to 128 \xrightarrow{\text{ReLU}} 128 \xrightarrow{\text{ReLU}} 64 \xrightarrow{\text{ReLU}} 64 \xrightarrow{\text{ReLU}} (B{-}1)$.
-        Skip connections are added every two layers to facilitate gradient flow.
-  \item \textbf{Residual prediction}: The MLP output $\boldsymbol{\delta}$ represents
-        a \emph{correction delta} rather than absolute quantile values.
-        The final corrected histogram is computed as
-        $\mathbf{v}_{\text{corrected}} = \mathbf{v}_{\text{norm}} + \boldsymbol{\delta}$,
-        allowing the model to focus on learning drift-induced deviations.
+  \item \textbf{Tokenization}: the normalized stale quantile boundaries, lightweight
+        metadata, and up to $K$ recent feedback observations (predicate type, boundary,
+        estimated and actual selectivity) are embedded into a common token space, with a
+        validity mask for unused slots.
+  \item \textbf{Set encoding}: the feedback tokens are aggregated by a permutation-invariant
+        encoder (self-attention over the unordered window followed by masked pooling), so the
+        representation is invariant to observation order and handles a variable number of
+        observations.
+  \item \textbf{Residual head}: the pooled representation, fused with the encoded prior,
+        predicts a correction delta $\boldsymbol{\delta}$ to the interior quantile
+        boundaries; the output is clamped and monotonized to a valid CDF, so the model learns
+        drift-induced deviations rather than absolute boundaries.
 \end{enumerate}
 
-\paragraph{Training details.}
-The OASIS MLP is trained offline on simulation-derived ground truth.
-A \emph{compound drift operator} mutates an in-memory column through four
-atomic operations per round---\textbf{insert}, \textbf{delete}, \textbf{update},
-and \textbf{null change}---with drift intensity $q$ controlling the number of
-rounds between consecutive query observations.
-For each simulated sample the simulator records the true post-mutation quantile
-vector $\mathbf{v}^*$ as the regression target.
-The model is trained end-to-end via mini-batch Adam with He weight initialization,
-L2 regularization $\alpha{=}10^{-4}$, and gradient clipping (max norm $= 1.0$).
-The complete implementation is $\sim$550\,lines of pure Python\,+\,NumPy
-(no external ML framework), totalling $\approx$38\,K parameters.
+\paragraph{Training objective.}
+Unlike a reconstruction-trained prior, the model is trained on the composite
+optimizer-facing objective of the main paper: the held-out future-predicate log-Q-error of
+the \emph{projected} marginal, a FactorJoin bin-mass join-regret term, an in-window
+feedback-consistency residual, and a light reconstruction regularizer toward the post-drift
+marginal. Training uses a sparse-to-dense feedback curriculum and a domain-randomized mixture
+of drift families (batch loads, range/date shifts, skew evolution, outlier bursts, multimodal
+and seasonal drift) so the completion generalizes across feedback budgets and drift
+mechanisms. The model is trained offline in PyTorch with Adam and reused across columns
+without per-table retuning. The main-paper ablation shows that applying the projection inside
+the training loop is inessential---post-hoc projection performs identically---so the
+contribution is the training objective, not in-loop calibration.
 
 \subsection{Per-Conjunct Operator Instrumentation}
 

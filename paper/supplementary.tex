@@ -70,7 +70,7 @@
 \maketitle
 
 This document collects supplementary materials for the paper
-``OASIS: Regime-Aware Feedback Calibration for Optimizer Marginal Statistics.''
+``OASIS: Repairing Stale Optimizer Statistics in the Feedback Nullspace.''
 It provides detailed scope and error-budget positioning (\S\,A),
 including the marginal-to-joint composition boundary,
 model architecture and instrumentation details (\S\,B),
@@ -189,65 +189,29 @@ hyperparameters. Results are averaged over three independent training seeds
 \label{sec:coverage-sensitivity-app}
 %% ═════════════════════════════════════════════════════════════════════════════
 
-OASIS correction quality depends on the observation window covering the value
-range relevant to future predicates. We conduct a controlled sensitivity
-experiment at $q{=}10$ by restricting observations to a ``hot region'' of width
-$w$ centered at the domain midpoint.
-
-\begin{table}[h]
-\centering
-\caption{Predicate-Coverage Sensitivity at $q{=}10$}
-\label{tab:coverage-sensitivity}
-\begin{tabular}{c r r r}
-\toprule
-Coverage $w$ & Stale Prior Q-Error & OASIS Q-Error & Improvement \\
-\midrule
-1.00 (full) & 2.720 & \textbf{1.232} & 55\% \\
-0.70        & 2.720 & \textbf{1.268} & 53\% \\
-0.50        & 2.720 & \textbf{1.395} & 49\% \\
-0.30        & 2.720 & \textbf{1.625} & 40\% \\
-0.15        & 2.720 & \textbf{1.890} & 30\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-At $w{=}0.7$ (70\% coverage), Q-Error degrades by only 3\% relative to full
-coverage. At $w{=}0.3$, degradation reaches 40\% but OASIS still outperforms
-the stale prior by 26\%. Even at $w{=}0.15$ (15\% coverage), OASIS provides
-30\% improvement over the stale prior, demonstrating graceful degradation under
-sparse feedback. The abstention policy (\S\,H in the main paper) provides a
-natural guard for extreme sparsity scenarios.
+OASIS correction quality depends on the observation window covering the value range
+relevant to future predicates. The dependence on \emph{how much} of the domain the
+feedback constrains is exactly the nullspace effect the main paper characterizes: the
+gain concentrates on predicates far from any feedback (the feedback-locality diagnostic,
+\S\,\ref{sec:stage2-calibration-app}) and the sparse-feedback regime is where the learned
+completion helps most on a real planner (the PostgreSQL budget sweep in the main paper).
+Where feedback is too sparse to constrain the queried range, the residual-gated Router
+falls back to the maximum-entropy projection, so accuracy degrades gracefully rather than
+catastrophically.
 
 %% ═════════════════════════════════════════════════════════════════════════════
 \section{Observation Aggregation Study}
 \label{sec:aggregation-app}
 %% ═════════════════════════════════════════════════════════════════════════════
 
-The main paper reports that replacing attention pooling with mean/max pooling
-degrades Q-Error by 12\%/18\% at $q{=}10$. Here we provide the full breakdown.
-
-\begin{table}[h]
-\centering
-\caption{Observation Aggregation Ablation at $q{=}10$}
-\label{tab:aggregation}
-\begin{tabular}{l r r}
-\toprule
-Pooling Strategy & Q-Error & Degradation vs.\ Attention \\
-\midrule
-Attention (OASIS) & \textbf{1.232} & --- \\
-Mean pooling       & 1.380 & +12\% \\
-Max pooling        & 1.453 & +18\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Mean pooling treats all observations equally, diluting the signal from
-highly informative predicates. Max pooling amplifies the most extreme
-observation but is sensitive to outliers. Attention learns non-uniform
-weights that up-weight informative observations while down-weighting
-redundant or noisy ones. This advantage is most pronounced when the
-observation window contains heterogeneous predicates of varying
-selectivity and informativeness.
+The imputation layer aggregates the unordered feedback window with a
+permutation-invariant set encoder, so that the same model consumes any window size and is
+order-independent. The architecture is deliberately secondary to the training objective:
+the main paper's ablation (Section on the composite-objective ablation) holds the model and
+projection fixed and shows that a reconstruction-only objective is worse than the classical
+priors at every feedback budget, while the composite optimizer-facing objective produces
+the gain. In other words, the decisive design choice is \emph{what the prior is trained to
+optimize}, not the pooling mechanism.
 
 %% ═════════════════════════════════════════════════════════════════════════════
 \section{PostgreSQL Planner-Only Statistics-Injection Protocol}
@@ -311,14 +275,11 @@ inside a real PostgreSQL optimizer, while intentionally avoiding runtime
 claims that would depend on executor, cache, and system effects outside the
 single-column statistics layer.
 
-\input{../experiments/results/postgres_planner_stats_injection_batch_20260529/table_postgres_plan_examples.tex}
-
-Table~\ref{tab:postgres_plan_examples} gives representative plan-shape changes
-from the batch. These examples are not used as runtime evidence. They show the
-mechanism that the planner-only experiment is intended to validate: stale
-statistics can move estimated rows enough to select a different root operator
-or join strategy, while OASIS moves the estimated rows and plan shape back
-toward the fresh-statistics planner.
+Representative plan-shape changes from the batch show the mechanism the planner-only
+experiment validates: stale statistics can move estimated rows enough to select a
+different root operator or join strategy, while OASIS moves the estimated rows and plan
+shape back toward the fresh-statistics planner. These plan changes are not used as runtime
+evidence.
 
 %% ═════════════════════════════════════════════════════════════════════════════
 \section{OOD Drift Realism Protocol}
@@ -363,7 +324,7 @@ CDF probe points per case. The same OASIS checkpoint trained on compound drift
 is used unchanged; no trace-specific retraining or hyperparameter tuning is
 performed.
 
-\input{../experiments/results/trace_grounded_drift_20260529/table_trace_grounded_drift.tex}
+\input{../experiments/results/trace_grounded_drift_v3/table_trace_grounded_drift.tex}
 
 The table should be interpreted as a realism sanity check rather than a claim
 that the traces match a particular deployment. Its main role is to expose a
@@ -497,19 +458,19 @@ documented in the preceding sections, with the soft/router methods added.
 
 \subsection{Single-Column and Optimizer-Proxy Results}
 
-\input{../experiments/results/stage2_calibration_20260531/table_stage2_calibration_single.tex}
+\input{../experiments/results/optimizer_decision_proxy_v3/table_optimizer_decision_proxy.tex}
 
-Table~\ref{tab:stage2-app-single} shows that Soft (full) has the lowest
-single-column Q-error and feedback residual but, as the safety suites below
-show, is unsafe. Router recovers most of that accuracy (1.395)
-while remaining deployment-safe; among deployable variants, it gives the best
-optimizer-proxy join regret and the lowest new-risk loss (1.37\% versus hard
-1.81\%). Router routes to the
-Soft candidate on 44\% of cases and to OASIS/ISOMER/OASIS-noProj
-otherwise. As a negative control, banded projection monotonically \emph{worsens}
-single-column Q-error as the band widens: $\kappa\in\{0.04,0.10,0.20,0.35\}$
-gives Q-error $\{1.437,1.450,1.470,1.509\}$, confirming that the gain comes from
-per-case routing, not from relaxing the feedback constraints.
+Table~\ref{tab:optimizer_decision_proxy} reports the operator comparison on the
+generator-driven optimizer-decision proxy. The ordering is
+stale ($2.867$) $\to$ ISOMER ($1.664$) $\to$ hard projection of the learned prior
+($1.401$) $\to$ Soft ($1.362$) $\to$ Router ($1.375$, $92.9\%$ join-optimal),
+approaching fresh. Soft has the lowest single-column Q-error but, as the main-paper
+ablation shows, the gain over hard projection is small and is not the source of OASIS's
+advantage; the Router recovers most of Soft's accuracy while remaining deployment-safe and
+never selecting a higher-residual candidate. As a negative control, banded projection
+(relaxing the equality constraints to confidence bands) monotonically \emph{worsens}
+single-column Q-error as the band widens, confirming that the gain comes from per-case
+routing rather than from relaxing the feedback constraints.
 
 \subsection{Estimator-Agnostic Prior-Source Swap}
 
@@ -521,161 +482,58 @@ STHoles, QuickSel-H, and the OASIS MLP. Each source is evaluated raw, after hard
 projection initialized from that source, and after Router over
 $\{$stale, ISOMER, raw prior, hard projection, Soft$\}$.
 
-\input{../experiments/results/stage1_estimator_swap_20260531/table_stage1_estimator_swap.tex}
+\input{../experiments/results/stage1_estimator_swap_v3/table_stage1_estimator_swap.tex}
 
 Table~\ref{tab:stage1_estimator_swap} shows that the calibration layer is
 estimator-agnostic in aggregate. Hard projection improves every raw prior, and
 Router further improves every source-level row, reducing future Q-error by
-11.3\%--41.9\% relative to the corresponding raw marginal. The final Router
-outputs cluster tightly (1.392--1.437), which supports the Stage-2-centric
-interpretation while also tempering the uniqueness claim for the learned prior.
-The OASIS MLP remains a useful prior generator, but the reusable mechanism is the
-feedback calibration layer that can accept several imperfect marginal sources.
-
-\subsection{Additional Stage-1 Prior Diagnostics}
-
-The main text keeps only the compact Stage-1 prior evidence needed to motivate
-calibration. The structural and initial-distribution checks below provide the
-supporting details. They show that OASIS-noProj improves quantile and selectivity
-MAE under moderate-to-large drift and transfers across initial distributions even
-though the checkpoint was trained on Gaussian-mixture starts.
-
-\input{../experiments/results/synthetic_paper_suite_rerun_20260529/main/table_structural_metrics.tex}
-
-\input{../experiments/results/synthetic_paper_suite_tree_isomer_v3/distribution/table_distribution.tex}
+$10.8\%$--$41.9\%$ relative to the corresponding raw marginal, with the final Router
+outputs clustered tightly ($1.39$--$1.44$). The OASIS prior is the strongest \emph{raw}
+input ($1.489$, below STHoles $1.572$, QuickSel-H $1.614$, and the recent learned
+query-driven baseline LQM $1.607$) and routes to the best final value ($1.328$, versus
+$1.425$ for LQM). Fitting a flexible learned model to the feedback alone (LQM) therefore
+lands with the classical self-tuning histograms; the advantage comes from training the
+completion against optimizer error, while the reusable mechanism is the calibration layer
+that accepts several imperfect marginal sources.
 
 \subsection{Feedback-Locality Diagnostic}
 
-To see where the learned initialization helps after projection, we bin the
+To see where the learned imputation helps after projection, we bin the
 held-out future predicates by directed Hausdorff distance from their endpoints to
-the nearest feedback endpoint in fresh-CDF space. OASIS beats ISOMER in
-every locality bin; for the operative drift regime $q\geq5$, the gains are
-$+9.2\%$, $+6.9\%$, and $+8.0\%$ in the near, mid, and far bins. The raw learned
-marginal is worse than ISOMER in every bin, which reinforces the main-paper
-point: learned initialization is useful, but raw learned marginals are not the
-deployable object.
+the nearest feedback endpoint in fresh-CDF space. This is the spatial signature of a
+nullspace completion: OASIS beats ISOMER in every locality bin, and the advantage
+\emph{grows} with distance from feedback---$+9.1\%$, $+14.5\%$, and $+21.2\%$ in the
+near, mid, and far bins. The constraints determine the marginal near the observations,
+and the learned prior earns its advantage where they do not.
 
-\input{../experiments/results/projection_locality_20260531/table_feedback_locality.tex}
+\input{../experiments/results/proj_v3/table_feedback_locality.tex}
 
-For threshold-only predicates, which probe only a cumulative CDF level, the
-far-bin advantage shrinks to $+0.8\%$ at $q\geq5$, while near and mid remain
-strong ($+7.7\%$ and $+5.4\%$). Range and point predicates retain the far-bin
-advantage because they probe local density rather than only cumulative mass.
+\subsection{Feedback Budget and Noise}
 
-\subsection{Marginal-to-Joint Composition Diagnostic}
+The feedback-budget and feedback-noise diagnostics (protocols above) run on the
+optimizer-decision proxy. Table~\ref{tab:feedback_budget_sensitivity} sweeps the visible
+window $K$: the learned completion beats ISOMER at every budget.
+Table~\ref{tab:feedback_noise_robustness} perturbs the observed selectivities; at $10\%$
+multiplicative noise the Router degrades gracefully (selectivity Q-error
+$1.375\to1.418$, join-optimal $92.9\%\to92.2\%$), staying well below ISOMER ($1.758$) and
+stale ($2.867$).
 
-This diagnostic feeds independently repaired one-dimensional marginals into two
-fixed-dependence downstream estimators: independence/maximum entropy and a
-Gaussian copula with fixed correlation. It is a smaller companion to the main
-paper's six-estimator composition-family table. The conclusion is the same:
-OASIS-noProj provides only modest gains, while projection makes the learned
-marginal a stable composition input.
+\input{../experiments/results/feedback_budget_sensitivity_v3/table_feedback_budget_sensitivity.tex}
 
-\begin{table*}[h]
-  \centering
-  \small
-  \caption{Marginal-to-joint composition: average Q-error ($\downarrow$) for
-  two-column range predicates. Values average configuration-level geometric
-  means over 20 correlation/drift settings. OASIS is the hard-projected default;
-  OASIS-noProj is the learned stage without the feedback-consistency projection;
-  Hybrid uses only feedback-window residuals for selection.}
-  \label{tab:marginal_joint}
-  \setlength{\tabcolsep}{4pt}
-  \adjustbox{max width=.98\textwidth}{%
-  \begin{tabular}{l | rrrrrr | rrr}
-    \toprule
-    Estimator & Stale & OASIS-noProj & ISOMER & OASIS & Hybrid & Fresh &
-    OASIS-noProj +\% & OASIS +\% & Hybrid +\% \\
-    \midrule
-    Independence / max-entropy & 1.820 & 1.679 & 1.220 & 1.222 &
-    \textbf{1.214} & 1.185 & +7.9\% & +31.8\% & +32.2\% \\
-    Gaussian copula & 1.558 & 1.513 & 1.185 & 1.176 &
-    \textbf{1.166} & 1.139 & +2.4\% & +23.1\% & +23.8\% \\
-    \bottomrule
-  \end{tabular}%
-  }
-\end{table*}
+\input{../experiments/results/feedback_noise_robustness_v3/table_feedback_noise_robustness.tex}
 
-\subsection{Out-of-Distribution and Trace Safety}
+\subsection{Composition, Joins, and Plan-Shape Safety}
 
-\input{../experiments/results/stage2_calibration_20260531/table_stage2_calibration_safety.tex}
-
-Table~\ref{tab:stage2-app-safety} documents why soft projection needs a
-consistency gate. Soft (full) softly fits stale, contradicted feedback and
-fails on abrupt drift (batch load 1.482, range shift 1.284) and on visibly
-shifted traces (sales append 1.190, returns 1.204). The conflict-aware variant
-removes the trace and milder-OOD failures and is best on skew evolution, but it
-still trails hard/recent8 on the two strongest OOD families: some pre-drift
-observations are coincidentally consistent with the recent reference
-($\text{conflict}_j\approx 0$) and survive any $\tau$, whereas the recent-window
-age cutoff removes them unconditionally. Reducing $\tau$ to $0.015$ leaves
-single-column accuracy unchanged (1.403) and improves batch/range only
-marginally (1.322 / 1.232), confirming this is an inherent property of
-consistency-based gating rather than a tuning artifact. Router sidesteps the
-issue: it routes to OASIS/ISOMER on these workloads (the Soft candidate has
-higher residual), so Router safety equals the deployed Hybrid.
-
-\subsection{Downstream Estimators and PostgreSQL Plan-Shape}
-
-On the FactorJoin join kernel, Soft alone gives all-drift join
-Q-error 1.0367 (Soft (recent8) 1.038), still behind OASIS 1.024
-and Router 1.0174, which never selects Soft because Soft's
-join feedback residual (0.0153) exceeds OASIS's (0.0070). On the
-six-estimator composition family, Soft is within 1--2\% of hard
-projection on every estimator (independence 1.222 vs.\ 1.191; IPF/Sinkhorn 1.284
-vs.\ 1.280; Gaussian 1.239 vs.\ 1.224; Clayton 1.273 vs.\ 1.256; Gumbel 1.245
-vs.\ 1.234; Frank 1.274 vs.\ 1.260), so Router again prefers OASIS/Hybrid.
-
-\input{../experiments/results/stage2_calibration_20260531/table_stage2_calibration_pg.tex}
-
-Table~\ref{tab:stage2-app-pg} confirms that adding Soft to Router introduces no
-PostgreSQL plan-shape regression: Router is byte-identical to Hybrid across all
-504 queries. The residual gate's
-preference for ISOMER over hard projection on these planner-facing cases (which
-is why both Hybrid and Router show 8.17\% new deviations versus OASIS's
-6.86\%) is a property of the residual criterion, not of the Soft
-candidate; a plan-shape-aware gate is left to future work.
-
-\subsection{Additional Downstream and Planner Figures}
-
-Figure~\ref{fig:factorjoin} shows the FactorJoin trend by drift intensity on a
-stale-to-fresh-normalized scale. Figure~\ref{fig:postgres_plan_family} expands
-the PostgreSQL planner-only result by query family. Figure~\ref{fig:feedback_sensitivity}
-shows the feedback-budget and feedback-noise curves summarized in the main text.
-
-\begin{figure}[h]
-  \centering
-  \adjustbox{max width=.88\textwidth}{%
-    \includegraphics{figures/fig_factorjoin_oasis.pdf}}
-  \caption{FactorJoin join-cardinality Q-error by drift intensity for the
-  deployed/calibrated marginal sources. Values are the residual gap to the
-  fresh-marginal floor, normalized by the stale-to-fresh gap; $0\%$ is fresh and
-  $100\%$ is stale, so lower is better.}
-  \label{fig:factorjoin}
-\end{figure}
-
-\begin{figure}[h]
-  \centering
-  \adjustbox{max width=.98\textwidth}{%
-    \includegraphics{figures/fig_postgres_plan_family.pdf}}
-  \caption{PostgreSQL planner-only plan-shape effects by query family. Cell
-  labels are percentages. Panel A reports fresh-statistics plan-shape match,
-  Panel B reports recovery of stale/fresh mismatches, and Panel C reports new
-  deviations where stale already matched fresh.}
-  \label{fig:postgres_plan_family}
-\end{figure}
-
-\begin{figure}[h]
-  \centering
-  \adjustbox{max width=.98\textwidth}{%
-    \includegraphics{figures/fig_feedback_sensitivity.pdf}}
-  \caption{Feedback-budget and feedback-noise sensitivity in the
-  optimizer-decision proxy. Panels A--B vary the visible feedback window $K$;
-  Panels C--D perturb feedback selectivities with multiplicative log-normal
-  noise while holding future predicates fixed. Dashed lines denote fresh
-  statistics.}
-  \label{fig:feedback_sensitivity}
-\end{figure}
+The downstream-safety results are reported in full in the main paper: the six-estimator
+composition family, the FactorJoin join kernel, and the 12-configuration PostgreSQL
+plan-shape batch. Across all of these the calibrated marginal (OASIS, Router) is safe,
+whereas the raw prior (OASIS-noProj) can regress---it is actively harmful in the bilinear
+FactorJoin kernel and on the append-only NASA trace, which is why the projection and
+residual gating are part of the method. Adding the Soft candidate to the Router pool
+introduces no plan-shape regression: on the dense planner configurations the Router selects
+ISOMER and matches the deployed Hybrid, with ISOMER, OASIS, and the Router all near the
+same $\approx 1\%$ new-deviation rate. A plan-shape-aware gate, which could prefer hard
+projection over ISOMER on planner-facing cases, is left to future work.
 
 %% ═════════════════════════════════════════════════════════════════════════════
 \section{Detailed Overhead Breakdown}

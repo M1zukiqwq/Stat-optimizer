@@ -1,5 +1,6 @@
 %!TEX encoding = UTF-8 Unicode
-\documentclass[runningheads]{llncs}
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
 
 %% ── packages ─────────────────────────────────────────────────────────────────
 \usepackage{booktabs}
@@ -9,6 +10,9 @@
 \usepackage{adjustbox}
 \usepackage{subcaption}
 \usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsthm}
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}{Definition}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \let\REQUIRE\Require
@@ -58,14 +62,11 @@
 
 \title{OASIS: Supplementary Materials}
 
-\titlerunning{OASIS: Supplementary Materials}
+\author{Qichu Tian \and Heng Chen\\
+  Xi'an Jiaotong University, Xi'an, China\\
+  \texttt{mizukiqwq@stu.xjtu.edu.cn} \quad \texttt{hengchen@xjtu.edu.cn}}
 
-\author{Author Names Redacted for Review}
-
-\authorrunning{Author Names Redacted}
-
-\institute{Affiliation Redacted\\
-\email{redacted@review.org}}
+\date{}
 
 \maketitle
 
@@ -472,6 +473,33 @@ never selecting a higher-residual candidate. As a negative control, banded proje
 single-column Q-error as the band widens, confirming that the gain comes from per-case
 routing rather than from relaxing the feedback constraints.
 
+\subsection{Router Selection Diagnostics}
+\label{sec:router-diagnostics}
+
+Because the Router selects on the in-window feedback residual alone---a non-oracle
+signal---we quantify how well that signal stands in for the quantity we actually care
+about, the held-out future Q-error. Over the $768$ proxy cases we record, per case, every
+candidate's residual and its true future Q-error, and compare deployable selection
+policies against an offline oracle that minimizes the future Q-error directly
+(Table~\ref{tab:router_diagnostics}).
+
+\input{../experiments/results/router_diagnostics_v3_20260602/table_router_diagnostics.tex}
+
+Three points follow. First, the residual-gated Router ($1.375$) beats both static policies
+(always-ISOMER $1.664$, always-OASIS $1.401$) and a random choice among the projected
+candidates ($1.470$), and recovers most of the gap to the non-deployable oracle ($1.291$);
+it also has the highest join-optimal rate ($92.9\%$) of any deployable policy. Second, the
+residual is an imperfect proxy: the Router agrees with the oracle's choice on $42.3\%$ of
+cases, exact residual ties are negligible ($0.0\%$) but near-ties ($\le 1\%$ relative)
+occur on $7.3\%$, and on $19.1\%$ of cases the Router's selected candidate has a higher
+future Q-error than always-ISOMER would. Third, and consistent with the main-paper
+limitation, the residual gate does not bound the \emph{tail}: the Router's worst-case
+single-case Q-error ($6.43$) exceeds that of always-OASIS ($4.60$), because minimizing
+in-window residual does not preclude an occasional poor extrapolation off the constrained
+span. In aggregate the Router is the best deployable policy, but this tail behavior is why
+we present it as a residual-based safety fallback rather than a plan-shape guarantee, and
+why a plan-shape-aware gate is left to future work.
+
 \subsection{Estimator-Agnostic Prior-Source Swap}
 
 The main text also asks whether Stage 2 is merely an OASIS-MLP-specific patch.
@@ -514,9 +542,8 @@ The feedback-budget and feedback-noise diagnostics (protocols above) run on the
 optimizer-decision proxy. Table~\ref{tab:feedback_budget_sensitivity} sweeps the visible
 window $K$: the learned completion beats ISOMER at every budget.
 Table~\ref{tab:feedback_noise_robustness} perturbs the observed selectivities; at $10\%$
-multiplicative noise the Router degrades gracefully (selectivity Q-error
-$1.375\to1.418$, join-optimal $92.9\%\to92.2\%$), staying well below ISOMER ($1.758$) and
-stale ($2.867$).
+multiplicative noise the Router degrades gracefully (selectivity Q-error $1.375\to1.418$,
+join-optimal $92.9\%\to92.2\%$), staying well below ISOMER ($1.758$) and stale ($2.867$).
 
 \input{../experiments/results/feedback_budget_sensitivity_v3/table_feedback_budget_sensitivity.tex}
 
@@ -569,7 +596,7 @@ The statistics-format conversion interface adds negligible overhead
 residual bins). Even in the worst tested configuration (50 MCV, 50 bins), the
 conversion completes in 1.03\,ms.
 
-\bibliographystyle{splncs04}
+\bibliographystyle{plain}
 \bibliography{references}
 
 \end{document}

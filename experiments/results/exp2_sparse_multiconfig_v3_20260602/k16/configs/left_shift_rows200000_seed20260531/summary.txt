@@ -1,0 +1,53 @@
+PostgreSQL planner-only stats injection
+================================================
+No wall-clock runtime is measured. True rows come from COUNT(*);
+estimated rows and plan shapes come from EXPLAIN (FORMAT JSON).
+
+Queries per method: 84
+Stale/fresh plan-shape disagreements: 41
+Hybrid selected: isomer
+Config: left_shift_rows200000_seed20260531
+
+Method          RowQE  QEImp  BeatStale  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------------
+stale           35.719    0.0%       0.0%       51.2%       0.0%     0.0%
+isomer          2.265   93.7%     100.0%       97.6%      95.1%     0.0%
+oasis           2.853   92.0%      96.4%       95.2%      95.1%     4.7%
+oasis_projected 2.242   93.7%     100.0%       97.6%      95.1%     0.0%
+oasis_soft_projection 2.323   93.5%     100.0%       97.6%      95.1%     0.0%
+hybrid          2.281   93.6%     100.0%       97.6%      95.1%     0.0%
+aggressive_hybrid 2.295   93.6%     100.0%       97.6%      95.1%     0.0%
+calibrated_hybrid 2.248   93.7%     100.0%       97.6%      95.1%     0.0%
+fresh           1.563   95.6%     100.0%      100.0%     100.0%     0.0%
+
+By family:
+  scan:
+    stale           RowQE=35.801 FreshPlan=75.0% Recovery=0.0%
+    isomer          RowQE=2.270 FreshPlan=100.0% Recovery=100.0%
+    oasis           RowQE=2.861 FreshPlan=96.4% Recovery=100.0%
+    oasis_projected RowQE=2.248 FreshPlan=100.0% Recovery=100.0%
+    oasis_soft_projection RowQE=2.330 FreshPlan=100.0% Recovery=100.0%
+    hybrid          RowQE=2.285 FreshPlan=100.0% Recovery=100.0%
+    aggressive_hybrid RowQE=2.300 FreshPlan=100.0% Recovery=100.0%
+    calibrated_hybrid RowQE=2.254 FreshPlan=100.0% Recovery=100.0%
+    fresh           RowQE=1.563 FreshPlan=100.0% Recovery=100.0%
+  join:
+    stale           RowQE=35.801 FreshPlan=21.4% Recovery=0.0%
+    isomer          RowQE=2.270 FreshPlan=92.9% Recovery=90.9%
+    oasis           RowQE=2.861 FreshPlan=89.3% Recovery=90.9%
+    oasis_projected RowQE=2.248 FreshPlan=92.9% Recovery=90.9%
+    oasis_soft_projection RowQE=2.330 FreshPlan=92.9% Recovery=90.9%
+    hybrid          RowQE=2.285 FreshPlan=92.9% Recovery=90.9%
+    aggressive_hybrid RowQE=2.300 FreshPlan=92.9% Recovery=90.9%
+    calibrated_hybrid RowQE=2.254 FreshPlan=92.9% Recovery=90.9%
+    fresh           RowQE=1.563 FreshPlan=100.0% Recovery=100.0%
+  join_dim_filter:
+    stale           RowQE=35.556 FreshPlan=57.1% Recovery=0.0%
+    isomer          RowQE=2.254 FreshPlan=100.0% Recovery=100.0%
+    oasis           RowQE=2.838 FreshPlan=100.0% Recovery=100.0%
+    oasis_projected RowQE=2.231 FreshPlan=100.0% Recovery=100.0%
+    oasis_soft_projection RowQE=2.310 FreshPlan=100.0% Recovery=100.0%
+    hybrid          RowQE=2.271 FreshPlan=100.0% Recovery=100.0%
+    aggressive_hybrid RowQE=2.284 FreshPlan=100.0% Recovery=100.0%
+    calibrated_hybrid RowQE=2.237 FreshPlan=100.0% Recovery=100.0%
+    fresh           RowQE=1.564 FreshPlan=100.0% Recovery=100.0%

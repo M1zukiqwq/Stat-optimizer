@@ -1,0 +1,17 @@
+\begin{table}[t]
+  \centering\small
+  \caption{Multi-configuration PostgreSQL planner-only sparse-feedback sweep (12 configurations: left/right drift $\times$ 100K/200K rows $\times$ 3 seeds, 84 queries each), aggregated over all query instances per feedback budget $K$. Same \texttt{pg\_statistic} injection path as Table~\ref{tab:postgres_planner_stats_injection_batch}; $K{=}16$ reproduces that dense batch. Row Q-error (lower better) with new-plan-deviation rate in parentheses (lower better). At sparse $K$ the maximum-entropy projection (ISOMER) degrades while the learned completion (OASIS) and the Router hold; the methods converge as feedback densifies.}
+  \label{tab:postgres_sparse_multiconfig}
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{r rrrr r}
+    \toprule
+    $K$ & Stale & ISOMER & OASIS & Router & Fresh \\
+    \midrule
+    2 & 27.7 & 7.53\,(3.7\%) & 2.83\,(1.1\%) & \textbf{2.82\,(1.1\%)} & 1.41 \\
+    4 & 27.8 & 2.95\,(1.1\%) & \textbf{2.49\,(2.8\%)} & 2.50\,(3.2\%) & 1.42 \\
+    6 & 27.8 & 3.44\,(1.1\%) & 2.46\,(1.1\%) & \textbf{2.46\,(1.1\%)} & 1.41 \\
+    8 & 27.8 & 2.45\,(1.1\%) & \textbf{2.40\,(1.1\%)} & 2.41\,(1.1\%) & 1.41 \\
+    16 & 27.7 & 2.36\,(1.1\%) & 2.36\,(1.1\%) & \textbf{2.35\,(1.1\%)} & 1.41 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

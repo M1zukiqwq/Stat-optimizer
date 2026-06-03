@@ -1,0 +1,22 @@
+\begin{table}[t]
+  \centering
+  \small
+  \caption{PostgreSQL planner-only statistics-injection evidence. True rows are measured with \texttt{COUNT(*)}; estimated rows and plan shapes are read from \texttt{EXPLAIN (FORMAT JSON)}. No query runtime is measured.}
+  \label{tab:postgres_planner_stats_injection}
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Method & Row QE & QE Imp. & Fresh Plan & Recovery & New Deviations \\
+    \midrule
+    Stale & 35.655 & 0.0\% & 51.2\% & 0.0\% & 0.0\% \\
+    ISOMER & 2.618 & 92.7\% & 94.0\% & 87.8\% & 0.0\% \\
+    OASIS-noProj & 2.992 & 91.6\% & 96.4\% & 92.7\% & 0.0\% \\
+    OASIS & 2.324 & 93.5\% & 95.2\% & 95.1\% & 4.7\% \\
+    Soft & 2.341 & 93.4\% & 97.6\% & 95.1\% & 0.0\% \\
+    Hybrid & 2.327 & 93.5\% & 95.2\% & 95.1\% & 4.7\% \\
+    Aggressive & 2.300 & 93.6\% & 95.2\% & 95.1\% & 4.7\% \\
+    Router & 2.327 & 93.5\% & 95.2\% & 95.1\% & 4.7\% \\
+    Fresh & 1.566 & 95.6\% & 100.0\% & 100.0\% & 0.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}

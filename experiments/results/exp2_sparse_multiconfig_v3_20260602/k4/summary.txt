@@ -1,0 +1,47 @@
+Multi-configuration PostgreSQL planner-only stats injection
+================================================================
+No wall-clock runtime is measured. True rows come from COUNT(*);
+estimated rows and plan shapes come from EXPLAIN (FORMAT JSON).
+
+Configurations: 12
+Queries per configuration per method: 84
+
+Aggregate over all query instances:
+Method          RowQE  QEImp  BeatStale  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------------
+stale           27.842    0.0%       0.0%       56.2%       0.0%     0.0%
+isomer          2.946   89.4%      98.0%       92.7%      84.6%     1.1%
+oasis           3.906   86.0%      97.7%       90.7%      78.7%     0.0%
+oasis_projected 2.491   91.1%      98.3%       93.4%      88.4%     2.8%
+oasis_soft_projection 2.539   90.9%      98.0%       93.8%      88.2%     1.8%
+hybrid          2.494   91.0%      98.3%       93.6%      88.4%     2.5%
+aggressive_hybrid 2.486   91.1%      98.0%       93.2%      88.4%     3.2%
+calibrated_hybrid 2.499   91.0%      98.1%       93.2%      88.4%     3.2%
+fresh           1.415   94.9%      99.6%      100.0%     100.0%     0.0%
+
+Mean across configurations:
+Method          RowQE(mean±sd)  FreshPlan  Recovery  NewDev
+------------------------------------------------------------------------
+stale           28.523±6.563      56.2%       0.0%     0.0%
+isomer          3.007±0.648      92.7%      84.3%     1.0%
+oasis           4.124±1.377      90.7%      77.0%     0.0%
+oasis_projected 2.514±0.353      93.4%      87.6%     2.9%
+oasis_soft_projection 2.567±0.391      93.8%      87.4%     1.8%
+hybrid          2.517±0.350      93.6%      87.6%     2.5%
+aggressive_hybrid 2.506±0.329      93.2%      87.6%     3.3%
+calibrated_hybrid 2.523±0.358      93.2%      87.6%     3.3%
+fresh           1.418±0.093     100.0%     100.0%     0.0%
+
+Hybrid choices:
+  left_shift_rows100000_seed20260529: oasis_projected
+  left_shift_rows100000_seed20260530: oasis_projected
+  left_shift_rows100000_seed20260531: oasis_projected
+  left_shift_rows200000_seed20260529: oasis_projected
+  left_shift_rows200000_seed20260530: oasis_projected
+  left_shift_rows200000_seed20260531: oasis_projected
+  right_shift_rows100000_seed20260529: oasis_projected
+  right_shift_rows100000_seed20260530: oasis_projected
+  right_shift_rows100000_seed20260531: oasis_projected
+  right_shift_rows200000_seed20260529: oasis_projected
+  right_shift_rows200000_seed20260530: oasis_projected
+  right_shift_rows200000_seed20260531: oasis_projected

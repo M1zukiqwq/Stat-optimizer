@@ -1,8 +1,8 @@
 \begin{table}[t]
 \centering
-\caption{TPC-H SF10 DML-drift study, aggregated over three independent refresh-stream seeds (mean\,$\pm$\,std; six curated date-sensitive queries each; planner-only statistics injection, PostgreSQL~14). The pretrained OASIS prior is reused with no TPC-H retraining. \emph{Scan Q-err} is the row-estimation error on the drifting date column. \emph{Time/Fresh} and \emph{Time/Stale} are geometric-mean ratios of warm-cache \texttt{EXPLAIN ANALYZE} execution time to the fresh- and stale-statistics runs. Calibrated statistics (OASIS, Router) match fresh statistics on both accuracy and runtime (Time/Fresh $\approx 1$). The stale wall-clock baseline is not a reliable target: a stale mis-estimate can pick a coincidentally cheaper-to-run plan (Time/Stale $>1$ here), whereas in other configurations it picks a much slower one; we therefore make no runtime-superiority claim and report that OASIS reproduces fresh-statistics behavior.}
+\small
+\caption{TPC-H SF10 DML-drift study, aggregated over three independent refresh-stream seeds (mean\,$\pm$\,std; six curated date-sensitive queries each; planner-only statistics injection, PostgreSQL~14). The pretrained OASIS prior is reused with no TPC-H retraining. \emph{Scan Q-err} is the row-estimation error on the drifting date column. \emph{Time/Fresh} and \emph{Time/Stale} are geometric-mean ratios of warm-cache \texttt{EXPLAIN ANALYZE} execution time to the fresh- and stale-statistics runs. Calibrated statistics (OASIS, Router) track fresh statistics within the reported distribution (median Time/Fresh $\approx 1$, worst case $\le 1.40$) and induce no plan-shape deviation from fresh across the 18 query instances. The stale wall-clock baseline is not a reliable target: a stale mis-estimate can pick a coincidentally cheaper-to-run plan (Time/Stale $>1$ here), whereas in other configurations it picks a much slower one; we therefore make no runtime-superiority claim and report that OASIS reproduces fresh-statistics behavior.}
 \label{tab:tpch_runtime}
-\footnotesize
 \setlength{\tabcolsep}{5pt}
 \begin{tabular}{lccc}
 \toprule

@@ -1,0 +1,24 @@
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Multi-configuration PostgreSQL planner-only statistics-injection evidence. Values are means over configurations; parentheses show one standard deviation across configurations. True rows use \texttt{COUNT(*)}; estimated rows and plan shapes use \texttt{EXPLAIN (FORMAT JSON)}. No query runtime is measured.}
+  \label{tab:postgres_planner_stats_injection_batch}
+  \setlength{\tabcolsep}{3pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lrrrr}
+    \toprule
+    Method & Row QE & Fresh Plan & Recovery & New Deviations \\
+    \midrule
+    Stale & 28.482 (6.558) & 56.1\% (5.4) & 0.0\% (0.0) & 0.0\% (0.0) \\
+    ISOMER & 2.461 (0.287) & 96.0\% (1.9) & 92.0\% (3.8) & 1.0\% (1.0) \\
+    OASIS-noProj & 3.866 (1.364) & 88.7\% (4.9) & 77.4\% (17.0) & 4.2\% (3.1) \\
+    OASIS & 2.425 (0.338) & 94.9\% (3.1) & 89.1\% (6.9) & 1.0\% (1.0) \\
+    Soft & 2.444 (0.341) & 94.9\% (3.1) & 89.1\% (6.9) & 1.0\% (1.0) \\
+    Hybrid & 2.420 (0.339) & 95.1\% (3.1) & 89.7\% (7.0) & 1.0\% (1.0) \\
+    Aggressive & 2.423 (0.335) & 94.9\% (3.1) & 89.1\% (6.9) & 1.0\% (1.0) \\
+    Router & 2.434 (0.337) & 95.1\% (2.9) & 89.6\% (6.5) & 1.0\% (1.0) \\
+    Fresh & 1.414 (0.094) & 100.0\% (0.0) & 100.0\% (0.0) & 0.0\% (0.0) \\
+    \bottomrule
+  \end{tabular}
+  }
+\end{table}

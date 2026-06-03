@@ -1,0 +1,48 @@
+{
+  "n_cases": 768,
+  "policies": {
+    "always_isomer": {
+      "selectivity_qerr_gm": 1.6641119485194544,
+      "join_optimal_frac": 0.8881429036458334,
+      "worst_case_qerr": 8.19804163240236
+    },
+    "always_oasis": {
+      "selectivity_qerr_gm": 1.4014226323636638,
+      "join_optimal_frac": 0.9277750651041666,
+      "worst_case_qerr": 4.596876502960541
+    },
+    "random_projected": {
+      "selectivity_qerr_gm": 1.4700102520139005,
+      "join_optimal_frac": 0.9251708984375,
+      "worst_case_qerr": 3.84944623296622
+    },
+    "router": {
+      "selectivity_qerr_gm": 1.3750812769903618,
+      "join_optimal_frac": 0.9292805989583334,
+      "worst_case_qerr": 6.43217374200532
+    },
+    "oracle": {
+      "selectivity_qerr_gm": 1.2907838261401554,
+      "join_optimal_frac": 0.9434814453125,
+      "worst_case_qerr": 2.952126726156393
+    }
+  },
+  "router_choice_distribution": {
+    "stale": 5,
+    "isomer": 103,
+    "oasis": 6,
+    "oasis_projected": 78,
+    "oasis_soft_projection": 576
+  },
+  "oracle_choice_distribution": {
+    "stale": 7,
+    "isomer": 115,
+    "oasis": 109,
+    "oasis_projected": 225,
+    "oasis_soft_projection": 312
+  },
+  "router_eq_oracle_frac": 0.4231770833333333,
+  "exact_tie_frac": 0.0,
+  "near_tie_frac": 0.07291666666666667,
+  "router_worse_than_isomer_frac": 0.19140625
+}

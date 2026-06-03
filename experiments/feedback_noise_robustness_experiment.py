@@ -197,9 +197,9 @@ def write_latex_table(output_dir: Path, summary: Sequence[dict], hybrid_choices:
         handle.write("  \\label{tab:feedback_noise_robustness}\n")
         handle.write("  \\setlength{\\tabcolsep}{4pt}\n")
         handle.write("  \\resizebox{\\textwidth}{!}{%\n")
-        handle.write("  \\begin{tabular}{lrrrrrrrrr}\n")
+        handle.write("  \\begin{tabular}{lrrrrrrrrrrr}\n")
         handle.write("    \\toprule\n")
-        handle.write("    Noise & Stale QE & ISOMER QE & OASIS-noProj QE & OASIS QE & Hybrid QE & Aggressive QE & OASIS-noProj JoinOpt & OASIS JoinOpt & Hybrid JoinOpt \\\\\n")
+        handle.write("    Noise & Stale QE & ISOMER QE & OASIS-noProj QE & OASIS QE & Hybrid QE & Router QE & Aggressive QE & OASIS-noProj JoinOpt & OASIS JoinOpt & Hybrid JoinOpt & Router JoinOpt \\\\\n")
         handle.write("    \\midrule\n")
         for sigma in sorted(hybrid_choices):
             stale = by_key[(sigma, "stale")]
@@ -207,15 +207,18 @@ def write_latex_table(output_dir: Path, summary: Sequence[dict], hybrid_choices:
             oasis = by_key[(sigma, "oasis")]
             projected = by_key[(sigma, "oasis_projected")]
             hybrid = by_key[(sigma, "hybrid")]
+            router = by_key[(sigma, "calibrated_hybrid")]
             aggressive = by_key[(sigma, "aggressive_hybrid")]
             handle.write(
                 f"    {noise_label(sigma)} & {stale['selectivity_qerr_gm']:.3f} & "
                 f"{isomer['selectivity_qerr_gm']:.3f} & {oasis['selectivity_qerr_gm']:.3f} & "
                 f"{projected['selectivity_qerr_gm']:.3f} & {hybrid['selectivity_qerr_gm']:.3f} & "
+                f"{router['selectivity_qerr_gm']:.3f} & "
                 f"{aggressive['selectivity_qerr_gm']:.3f} & "
                 f"{oasis['join_optimal_match_frac'] * 100:.1f}\\% & "
                 f"{projected['join_optimal_match_frac'] * 100:.1f}\\% & "
-                f"{hybrid['join_optimal_match_frac'] * 100:.1f}\\% \\\\\n"
+                f"{hybrid['join_optimal_match_frac'] * 100:.1f}\\% & "
+                f"{router['join_optimal_match_frac'] * 100:.1f}\\% \\\\\n"
             )
         handle.write("    \\bottomrule\n")
         handle.write("  \\end{tabular}%\n")

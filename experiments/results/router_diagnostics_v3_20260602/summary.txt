@@ -1,0 +1,17 @@
+Router diagnostics (768 cases)
+================================================
+Router == oracle choice: 42.3%
+Residual exact-tie rate: 0.0%
+Residual near-tie rate (<=1% rel): 7.3%
+Router future-QE worse than ISOMER: 19.1% of cases
+
+Policy             SelQE  JoinOpt  WorstQE
+------------------------------------------------
+always_isomer      1.664   88.8%  8.198
+always_oasis       1.401   92.8%  4.597
+random_projected   1.470   92.5%  3.849
+router             1.375   92.9%  6.432
+oracle             1.291   94.3%  2.952
+
+Router choices: {'stale': 5, 'isomer': 103, 'oasis': 6, 'oasis_projected': 78, 'oasis_soft_projection': 576}
+Oracle choices: {'stale': 7, 'isomer': 115, 'oasis': 109, 'oasis_projected': 225, 'oasis_soft_projection': 312}

@@ -1,0 +1,19 @@
+variant,paper_label,K,impr_vs_isomer_pct,impr_vs_stholes_pct,impr_vs_quicksel_pct,gate
+recon,Histogram reconstruction only,2,-0.8,-1.2,-2.1,FAIL
+recon,Histogram reconstruction only,6,0.5,-1.9,-4.3,FAIL
+recon,Histogram reconstruction only,16,-0.4,-7.8,-9.0,FAIL
+futonly,Future-loss only (in-loop proj.),2,9.2,8.8,8.0,PASS
+futonly,Future-loss only (in-loop proj.),6,9.1,7.0,4.8,PASS
+futonly,Future-loss only (in-loop proj.),16,7.3,0.5,-0.6,FAIL
+futjoin,+ FactorJoin regret,2,8.3,8.0,7.2,PASS
+futjoin,+ FactorJoin regret,6,8.0,5.9,3.6,PASS
+futjoin,+ FactorJoin regret,16,6.8,-0.0,-1.1,FAIL
+futjoincons,+ feedback residual,2,10.2,9.8,9.0,PASS
+futjoincons,+ feedback residual,6,9.5,7.4,5.1,PASS
+futjoincons,+ feedback residual,16,10.0,3.4,2.3,PASS
+posthoc,Raw-train + post-hoc projection,2,9.8,9.4,8.7,PASS
+posthoc,Raw-train + post-hoc projection,6,11.1,9.0,6.8,PASS
+posthoc,Raw-train + post-hoc projection,16,14.1,7.8,6.8,PASS
+full,Full (in-loop projection),2,9.0,8.7,7.9,PASS
+full,Full (in-loop projection),6,10.0,7.9,5.7,PASS
+full,Full (in-loop projection),16,14.1,7.8,6.8,PASS

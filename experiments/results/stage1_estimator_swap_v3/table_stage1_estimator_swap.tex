@@ -3,7 +3,8 @@
   \small
   \caption{Stage-1 prior-source swap under a fixed Stage-2 calibration protocol. Each row supplies a different single-column marginal prior to Stage 2; lower Q-error and feedback residual are better.}
   \label{tab:stage1_estimator_swap}
-  \setlength{\tabcolsep}{4pt}
+  \setlength{\tabcolsep}{5pt}
+  \adjustbox{max width=\columnwidth}{%
   \begin{tabular}{lrrrrrr}
     \toprule
     Stage-1 source & Raw QE & +Hard QE & +Router QE & Router gain & Raw resid. & Router resid. \\
@@ -17,4 +18,5 @@
     OASIS MLP & 1.489 & 1.346 & 1.328 & 10.8\% & 0.0628 & 0.0354 \\
     \bottomrule
   \end{tabular}
+  }
 \end{table}

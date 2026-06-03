@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 430" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,3.2 L0,6.4 Z" fill="#333333"/>
+    </marker>
+    <marker id="arrowred" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L7,3.2 L0,6.4 Z" fill="#b23b36"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="800" height="430" fill="#ffffff"/>
+
+  <!-- context label -->
+  <text x="400" y="17" text-anchor="middle" font-size="11" font-style="italic" fill="#666666">Existing DBMS query pipeline (unchanged)</text>
+
+  <!-- ===== DB pipeline (solid) ===== -->
+  <g fill="#f4f4f4" stroke="#555555" stroke-width="1.3">
+    <rect x="34"  y="30" width="92"  height="46" rx="6"/>
+    <rect x="176" y="30" width="158" height="46" rx="6"/>
+    <rect x="470" y="30" width="118" height="46" rx="6"/>
+    <rect x="636" y="30" width="92"  height="46" rx="6"/>
+  </g>
+  <g fill="#222222" font-size="13" text-anchor="middle">
+    <text x="80"  y="58">Query</text>
+    <text x="255" y="49">Cost-Based<tspan x="255" dy="16">Optimizer</tspan></text>
+    <text x="529" y="58">Executor</text>
+    <text x="682" y="58">Results</text>
+  </g>
+  <!-- pipeline arrows (solid) -->
+  <g stroke="#333333" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+    <line x1="126" y1="53" x2="170" y2="53"/>
+    <line x1="334" y1="53" x2="464" y2="53"/>
+    <line x1="588" y1="53" x2="630" y2="53"/>
+  </g>
+  <text x="399" y="46" text-anchor="middle" font-size="10" fill="#666666">plan</text>
+
+  <!-- statistics store (above OASIS inputs) -->
+  <rect x="44" y="120" width="148" height="42" rx="6" fill="#f4f4f4" stroke="#555555" stroke-width="1.3"/>
+  <text x="118" y="146" text-anchor="middle" font-size="12" fill="#222222">Statistics store (H&#8320;)</text>
+  <!-- stats feed to optimizer (solid elbow) -->
+  <polyline points="118,120 118,100 255,100 255,80" stroke="#333333" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- legend -->
+  <g font-size="10" fill="#444444">
+    <line x1="600" y1="104" x2="632" y2="104" stroke="#333333" stroke-width="1.5"/>
+    <text x="638" y="108">existing path / OASIS flow</text>
+    <line x1="600" y1="122" x2="632" y2="122" stroke="#b23b36" stroke-width="1.6" stroke-dasharray="6 4"/>
+    <text x="638" y="126">OASIS&#8211;DB integration (hooks)</text>
+  </g>
+
+  <!-- ===== OASIS container ===== -->
+  <rect x="34" y="244" width="694" height="150" rx="11" fill="#eef4fc" stroke="#2f6db0" stroke-width="1.6"/>
+  <text x="44" y="384" font-size="12" font-style="italic" fill="#2f6db0">OASIS &#8212; statistics-layer middleware (this work)</text>
+
+  <!-- OASIS internal boxes -->
+  <g stroke="#2f6db0" stroke-width="1.3">
+    <rect x="48"  y="310" width="118" height="50" rx="6" fill="#f3f3f3"/>
+    <rect x="190" y="310" width="104" height="50" rx="6" fill="#ffffff"/>
+    <rect x="318" y="310" width="120" height="50" rx="6" fill="#d8e6f7"/>
+    <rect x="462" y="310" width="150" height="50" rx="6" fill="#ffffff"/>
+    <rect x="636" y="310" width="80"  height="50" rx="6" fill="#f3f3f3"/>
+  </g>
+  <g fill="#1c2b3a" font-size="12.5" text-anchor="middle">
+    <text x="107" y="331">Stale H&#8320; +<tspan x="107" dy="16">feedback</tspan></text>
+    <text x="242" y="331">L1<tspan x="242" dy="16">Conversion</tspan></text>
+    <text x="378" y="331">L2 Imputation<tspan x="378" dy="16">(learned prior)</tspan></text>
+    <text x="537" y="331">L3 Calibration<tspan x="537" dy="16">(proj. + router)</tspan></text>
+    <text x="676" y="331">Corrected<tspan x="676" dy="16">&#x124;</tspan></text>
+  </g>
+  <!-- OASIS internal arrows (solid) -->
+  <g stroke="#333333" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+    <line x1="166" y1="335" x2="186" y2="335"/>
+    <line x1="294" y1="335" x2="314" y2="335"/>
+    <line x1="438" y1="335" x2="458" y2="335"/>
+    <line x1="612" y1="335" x2="632" y2="335"/>
+  </g>
+
+  <!-- ===== dashed integration hooks (orthogonal) ===== -->
+  <g stroke="#b23b36" stroke-width="1.6" fill="none" stroke-dasharray="6 4">
+    <!-- read stale H0 into OASIS inputs (straight drop) -->
+    <line x1="104" y1="162" x2="104" y2="310" marker-end="url(#arrowred)"/>
+    <!-- feedback from executor into OASIS inputs -->
+    <polyline points="529,76 529,214 140,214 140,310" marker-end="url(#arrowred)"/>
+    <!-- corrected H-hat back into the statistics the optimizer reads -->
+    <polyline points="676,310 676,190 132,190 132,162" marker-end="url(#arrowred)"/>
+  </g>
+  <g font-size="11" fill="#b23b36">
+    <text x="100" y="205" text-anchor="end">stale H&#8320;</text>
+    <text x="335" y="208" text-anchor="middle">feedback (est. vs. actual selectivity)</text>
+    <text x="392" y="184" text-anchor="middle">corrected &#x124; (statistics-assembly hook)</text>
+  </g>
+</svg>

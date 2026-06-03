@@ -53,7 +53,7 @@ strongest classical prior (STHoles) at three feedback budgets.
     \toprule
     Stage-1 objective variant & $K{=}2$ & $K{=}6$ & $K{=}16$ \\
     \midrule
-    Reconstruction-only (old objective) & $-1.2$ & $-1.9$ & $-7.8$ \\
+    Histogram reconstruction only & $-1.2$ & $-1.9$ & $-7.8$ \\
     Future-loss only (in-loop proj.)    & $+8.8$ & $+7.0$ & $+0.5$ \\
     \;\;+ FactorJoin regret             & $+8.0$ & $+5.9$ & $-0.0$ \\
     \;\;+ feedback residual             & $+9.8$ & $+7.4$ & $+3.4$ \\
@@ -75,7 +75,7 @@ Third---and contrary to a ``calibration-in-the-loop'' reading---\emph{training
 the prior through the projection operator is not the source of the gain}:
 ``raw-train ${+}$ post-hoc projection'' (the loss never sees the projection;
 projection is applied only at evaluation) matches ``full in-loop'' to within
-$0.5\%$ at every budget, and this holds across two training seeds on the full
+roughly one percentage point at every budget, and this holds across two training seeds on the full
 drift range (post-hoc $+6.7/+7.6/+6.9$ and $+6.8/+6.7/+7.1$; in-loop
 $+6.8/+7.0/+6.2$ and $+6.8/+6.0/+4.3$ at $K{=}2/6/16$). We therefore do not claim
 that differentiable projection in the loop is necessary; it is a convenient but
@@ -87,13 +87,15 @@ optimizer-facing training objective}, not the in-loop calibration.
 \label{sec:mr-mechanism}
 
 The regime structure is not an empirical accident; it follows from the rank of
-the feedback-constraint system. An equi-depth marginal with $B$ buckets has
-$B{-}1$ free interior quantile boundaries. Each feedback predicate constrains the
-CDF at its boundary value(s); after projection, the marginal is pinned only along
-the span of those constraints, and the orthogonal complement (the nullspace) is
-left free for the prior to fill. Table~\ref{tab:mr_rank} reports, per budget $K$,
-the mean independent-constraint rank and the residual free degrees of freedom
-over the held-out cases ($B{=}10$, so $B{-}1{=}9$).
+the feedback-constraint system. The exact linear object is the vector of cell masses on
+the partition induced by the histogram grid and the distinct feedback endpoints; a
+feedback predicate constrains an exact sum of those cell masses, and after projection the
+marginal is pinned only along the span of those constraints, leaving the orthogonal
+complement (the nullspace) free for the prior to fill. A histogram on the fixed
+$B{=}10$ grid exposes only $B{-}1{=}9$ interior boundaries, so Table~\ref{tab:mr_rank}
+reports, per budget $K$, an \emph{operational} rank on these exposed boundaries---a
+deployable proxy for the exact cell-level rank---and the residual free degrees of freedom
+over the held-out cases.
 
 \begin{table}[t]
   \centering\small
@@ -134,14 +136,18 @@ in-window feedback residual---the mean absolute discrepancy between each
 candidate's estimate and the observed selectivity on the current feedback
 window. It never observes test predicates, true cardinalities, runtimes, or plan
 shapes; the selection signal is exactly what a deployed system already has. Its
-per-budget choices follow the rank mechanism above: it selects the calibrated
-learned prior at $K\in\{2,4,6,8\}$ (where free DOF is available) and falls back
-to ISOMER at $K{=}16$ (where the marginal is pinned and the candidates coincide).
+per-budget choices follow the rank mechanism above, and the regime matters. On the
+optimizer-decision proxy, where future predicates are spread so that residual nullspace
+persists even at $K{=}16$, it keeps selecting the projected learned completion at the
+dense budget (about $51\%$ projected OASIS versus $33\%$ ISOMER). On the \emph{dense
+planner} configurations, where the queried windows pin the active constraints, it instead
+selects ISOMER on all twelve configurations---the regime where the marginal is pinned and
+the candidates coincide.
 The selection is plan-shape-safe: at dense planner feedback the routed output
 introduces new plan deviations in $1.1\%$ of queries, identical to ISOMER and
 below the raw prior's $2.3\%$.
 
-\subsection{Full-stack TPC-H safety: reproduces fresh-statistics behavior}
+\subsection{TPC-H runtime check: a narrow six-query sanity test}
 \label{sec:mr-tpch}
 
 We re-run the TPC-H SF10 DML-drift study with the composite-objective prior over

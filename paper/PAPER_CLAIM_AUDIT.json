@@ -1,0 +1,26 @@
+{
+  "audit_skill": "paper-claim-audit",
+  "verdict": "PASS",
+  "reason_code": "all_numbers_match_after_fix",
+  "summary": "Zero-context gpt-5.5 audit of 58 claims; headline numbers reconciled; 2 number_mismatch + 3 scope_overclaim fixed; 3 missing_evidence are advisory (inline rank/ablation tables traceable to mechanism_analysis.py and the objective ablation; noise prose is summary-backed and not table-input in main).",
+  "reviewer_model": "gpt-5.5",
+  "reviewer_reasoning": "xhigh",
+  "generated_at": "2026-06-02T12:30:00Z",
+  "details": {
+    "total_claims": 58,
+    "exact_match": 11,
+    "rounding_ok": 39,
+    "fixed": [
+      {"id": "C21", "type": "number_mismatch", "location": "sec:ablation", "was": "post-hoc vs in-loop within 0.5% at every budget", "evidence": "tab:mr_ablation diffs 0.7/1.1/0.0", "fix": "within roughly one percentage point at every budget"},
+      {"id": "C48", "type": "number_mismatch", "location": "sec:postgres-planner sparse", "was": "by K=8 within 3%", "evidence": "k8.log ISOMER 1.566 vs OASIS 1.514 = 3.32%", "fix": "gap nearly closed (1.57 vs 1.51, within 3.5%)"},
+      {"id": "C25", "type": "scope_overclaim", "location": "sec:stage1-swap", "was": "1.39-1.44 band (excludes OASIS 1.328)", "fix": "band 1.33-1.44"},
+      {"id": "C28", "type": "scope_overclaim", "location": "sec:ood-drift-realism", "was": "best non-fresh methods", "evidence": "skew Soft 1.163 < projected 1.171", "fix": "among the strongest non-fresh methods"},
+      {"id": "C32", "type": "scope_overclaim", "location": "sec:traces public", "was": "best deployable aggregate (Router 1.115)", "evidence": "Hybrid 1.1138 < Router 1.1153", "fix": "best deployable aggregates (Hybrid 1.114, Router 1.115)"}
+    ],
+    "missing_evidence_resolved": [
+      {"id": "C08", "evidence": "experiments/results/mechanism_rank_v3/rank_table.csv", "source": "experiments/oasis_torch/mechanism_analysis.py", "note": "matches tab:mr_rank exactly"},
+      {"id": "C20", "evidence": "experiments/results/ablation_objective_v3/ablation_gate.csv (+ abl_gate_out.log)", "source": "ckpt_abl_* objective-ablation gate-eval", "note": "impr_vs_stholes_pct matches tab:mr_ablation exactly"},
+      {"id": "C58", "evidence": "experiments/results/feedback_noise_robustness_v3/summary.csv", "note": "main cites noise as prose; calibrated_hybrid rows present; not \\input as table"}
+    ]
+  }
+}

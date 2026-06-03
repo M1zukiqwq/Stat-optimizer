@@ -1,0 +1,11 @@
+
+==== Feedback-constraint rank / free-DOF vs budget K (marginal DOF = B-1 = 9) ====
+  K  mean_rank  mean_freeDOF  frac_pinned(free=0)       n
+  2       2.32          6.68                 0.0%    1024
+  4       4.65          4.35                 0.0%    1024
+  6       6.95          2.05                 6.4%    1024
+  8       8.71          0.29                72.8%    1024
+ 12       8.98          0.02                98.2%    1024
+ 16       8.98          0.02                98.2%    1024
+
+Interpretation: free-DOF>0 => the projection leaves marginal freedom the learned prior fills (optimizer-relevant completion). free-DOF->0 / frac_pinned->1 => dense feedback pins the marginal => OASIS converges to ISOMER (tie).

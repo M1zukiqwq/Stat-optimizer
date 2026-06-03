@@ -3,18 +3,18 @@
   \small
   \caption{OASIS embedded in the FactorJoin bin-based join kernel. Join-cardinality Q-error ($\downarrow$) for a two-table equi-join whose join-key distributions drift; only the single-column key histogram consumed by FactorJoin varies across methods. OASIS and Hybrid recover most of the stale-to-fresh join error, whereas OASIS-noProj (the learned stage without projection) is actively harmful---it exceeds the stale baseline in this bilinear kernel.}
   \label{tab:factorjoin}
-  \setlength{\tabcolsep}{4pt}
+  \setlength{\tabcolsep}{5pt}
   \adjustbox{max width=\columnwidth}{%
-  \begin{tabular}{l | rrrrrrrr | rrr}
+  \begin{tabular}{l | rrrrrrr | rrr}
     \toprule
-    $q$ & Stale & OASIS-noProj & ISOMER & OASIS & Soft & Hybrid & Aggr. & Fresh & OASIS +\% & Soft +\% & Aggr. +\% \\
+    $q$ & Stale & OASIS-noProj & ISOMER & OASIS & Soft & Hybrid & Fresh & OASIS +\% & Soft +\% & Hybrid +\% \\
     \midrule
-    5 & 1.323 & 1.484 & \textbf{1.009} & 1.015 & 1.032 & \textbf{1.008} & \textbf{1.008} & 1.005 & +23.2\% & +22.0\% & +23.8\% \\
-    10 & 1.179 & 1.699 & \textbf{1.013} & 1.028 & 1.059 & 1.015 & 1.015 & 1.005 & +12.8\% & +10.2\% & +13.9\% \\
-    20 & 1.179 & 1.673 & \textbf{1.017} & 1.030 & 1.053 & 1.019 & 1.019 & 1.005 & +12.6\% & +10.7\% & +13.6\% \\
-    30 & 1.178 & 1.638 & \textbf{1.026} & 1.037 & 1.040 & 1.027 & 1.027 & 1.005 & +12.0\% & +11.7\% & +12.8\% \\
+    5 & 1.323 & 1.484 & \textbf{1.009} & 1.015 & 1.032 & \textbf{1.008} & 1.005 & +23.2\% & +22.0\% & +23.8\% \\
+    10 & 1.179 & 1.699 & \textbf{1.013} & 1.028 & 1.059 & 1.015 & 1.005 & +12.8\% & +10.2\% & +13.9\% \\
+    20 & 1.179 & 1.673 & \textbf{1.017} & 1.030 & 1.053 & 1.019 & 1.005 & +12.6\% & +10.7\% & +13.6\% \\
+    30 & 1.178 & 1.638 & \textbf{1.026} & 1.037 & 1.040 & 1.027 & 1.005 & +12.0\% & +11.7\% & +12.8\% \\
     \midrule
-    \textbf{All} & 1.213 & 1.621 & \textbf{1.016} & 1.027 & 1.046 & 1.017 & 1.017 & 1.005 & +15.3\% & +13.8\% & +16.1\% \\
+    \textbf{All} & 1.213 & 1.621 & \textbf{1.016} & 1.027 & 1.046 & 1.017 & 1.005 & +15.3\% & +13.8\% & +16.1\% \\
     \bottomrule
   \end{tabular}
   }

@@ -1,20 +1,20 @@
 \begin{table*}[t]
   \centering
   \small
-  \caption{Out-of-distribution drift realism suite. OASIS is trained only on compound drift and evaluated on deployment-inspired drift families. Values are geometric mean selectivity Q-error over held-out cases; Hybrid uses only feedback-window residuals for selection.}
+  \caption{Out-of-distribution drift realism suite. OASIS is trained only on compound drift and evaluated on deployment-inspired drift families. Values are geometric mean selectivity Q-error over held-out cases; Hybrid is the residual-gated selector and \textbf{bold} marks the best non-fresh method per family.}
   \label{tab:ood_drift_realism}
-  \setlength{\tabcolsep}{4pt}
-  \resizebox{\textwidth}{!}{%
-  \begin{tabular}{lrrrrrrrrr}
+  \setlength{\tabcolsep}{6pt}
+  \adjustbox{max width=\textwidth}{%
+  \begin{tabular}{lrrrrrrr}
     \toprule
-    Drift family & Stale & ISOMER & OASIS-noProj & OASIS & Soft & Hybrid & Aggressive & Fresh & Hybrid choice \\
+    Drift family & Stale & ISOMER & OASIS-noProj & OASIS & Soft & Hybrid & Fresh \\
     \midrule
-    Batch load & 4.203 & 1.461 & 1.987 & \textbf{1.251} & 1.422 & 1.390 & 1.390 & 1.000 & I 62\%, P 38\%, O 1\% \\
-    Range shift & 1.994 & \textbf{1.210} & 1.381 & 1.212 & 1.286 & 1.221 & 1.229 & 1.000 & I 75\%, P 22\%, O 3\% \\
-    Skew evolution & 1.540 & 1.182 & 1.521 & 1.171 & \textbf{1.163} & 1.174 & 1.173 & 1.000 & I 73\%, P 27\%, O 0\% \\
-    Outlier burst & 1.258 & 1.076 & 1.139 & \textbf{1.064} & 1.072 & 1.071 & 1.071 & 1.000 & I 62\%, P 37\%, O 0\% \\
-    Multimodal & 1.238 & 1.066 & 1.136 & \textbf{1.063} & 1.065 & 1.065 & 1.069 & 1.000 & I 70\%, P 30\%, O 1\% \\
-    Seasonal/mixed & 1.212 & 1.066 & 1.127 & \textbf{1.058} & 1.064 & 1.063 & 1.062 & 1.000 & I 68\%, P 32\%, O 0\% \\
+    Batch load & 4.203 & 1.461 & 1.987 & \textbf{1.251} & 1.422 & 1.390 & 1.000 \\
+    Range shift & 1.994 & \textbf{1.210} & 1.381 & 1.212 & 1.286 & 1.221 & 1.000 \\
+    Skew evolution & 1.540 & 1.182 & 1.521 & 1.171 & \textbf{1.163} & 1.174 & 1.000 \\
+    Outlier burst & 1.258 & 1.076 & 1.139 & \textbf{1.064} & 1.072 & 1.071 & 1.000 \\
+    Multimodal & 1.238 & 1.066 & 1.136 & \textbf{1.063} & 1.065 & 1.065 & 1.000 \\
+    Seasonal/mixed & 1.212 & 1.066 & 1.127 & \textbf{1.058} & 1.064 & 1.063 & 1.000 \\
     \bottomrule
   \end{tabular}%
   }

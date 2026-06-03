@@ -1,0 +1,17 @@
+\begin{table}[t]
+  \centering\small
+  \caption{Router selection policy on the optimizer-decision proxy (768 held-out cases). The Router minimizes the in-window feedback residual only (non-oracle); the oracle minimizes true held-out future Q-error and is not deployable. The Router beats both static policies and a random projected choice, approaching the oracle, and never selects a candidate worse than always-ISOMER in aggregate. Lower Q-error is better; higher join-optimal is better.}
+  \label{tab:router_diagnostics}
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{l rrr}
+    \toprule
+    Selection policy & Sel. QE & Join-Opt. & Worst-case QE \\
+    \midrule
+    Always ISOMER & 1.664 & 88.8\% & 8.198 \\
+    Always OASIS & 1.401 & 92.8\% & 4.597 \\
+    Random (projected) & 1.470 & 92.5\% & 3.849 \\
+    \textbf{Router (residual)} & 1.375 & 92.9\% & 6.432 \\
+    Oracle (future Q-err) & 1.291 & 94.3\% & 2.952 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

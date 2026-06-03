@@ -233,8 +233,9 @@ def write_examples_table(path: Path, rows: Sequence[dict]) -> None:
         handle.write("    \\midrule\n")
         for row in rows:
             for method, label in [("stale", "Stale"), ("projected", "OASIS"), ("fresh", "Fresh")]:
+                pred_esc = row['predicate'].replace('_', '\\_')
                 handle.write(
-                    f"    {family_label(row['family'])} & {row['predicate'].replace('_', '\\_')} & {row['true_rows']} & {label} & "
+                    f"    {family_label(row['family'])} & {pred_esc} & {row['true_rows']} & {label} & "
                     f"{float(row[f'{method}_rows']):.0f} & {float(row[f'{method}_qerr']):.1f} & "
                     f"{shorten(row[f'{method}_plan'].split(':', 1)[0], 32)} & {shorten(row[f'{method}_plan'])} \\\\\n"
                 )

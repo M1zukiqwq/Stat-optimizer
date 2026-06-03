@@ -30,6 +30,7 @@ MAP = {
     "noise": "feedback_noise_robustness_experiment",
     "pg": "postgres_planner_stats_injection_experiment",
     "tpch": "postgres_runtime_tpch_experiment",
+    "routerdiag": "router_diagnostics",
     "suite": "run_synthetic_paper_suite",
     "smoke": "oasis_accuracy_smoke",
 }

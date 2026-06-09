@@ -67,7 +67,7 @@
   stringstyle=\color{teal},
 }
 
-\journal{Information Systems}
+\journal{Data \& Knowledge Engineering}
 
 \begin{document}
 
@@ -174,7 +174,10 @@ error, a FactorJoin join-regret term, an in-window feedback-consistency residual
 reconstruction regularizer (Section~\ref{sec:stage1}). A \emph{calibration layer} reuses
 the classical feedback projection as a completion operator over any prior and adds a
 residual-gated router that selects between the learned completion and the maximum-entropy
-default from a deployment-visible signal (Section~\ref{sec:stage2}). This design yields
+default from a deployment-visible signal (Section~\ref{sec:stage2}). In database-engineering
+terms, OASIS is a statistics-\emph{maintenance} technique: it keeps optimizer statistics
+current between full \texttt{ANALYZE} refreshes from query feedback alone, turning a data-administration
+chore into an automated, optimizer-aware repair that requires no base-table rescan. This design yields
 four contributions:
 \begin{itemize}
   \item We formulate feedback-driven marginal repair as completion of an

@@ -20,6 +20,8 @@
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds,calc}
 \setlist{nosep,leftmargin=*}
 
+\newtheorem{proposition}{Proposition}
+
 % Absorb small residual overfull boxes from long hyphenated compound terms.
 \emergencystretch=3em
 
@@ -67,13 +69,13 @@
   stringstyle=\color{teal},
 }
 
-\journal{Data \& Knowledge Engineering}
+\journal{a database systems journal}% TODO: set target venue (e.g. TODS / VLDB Journal / TKDE) before submission
 
 \begin{document}
 
 \begin{frontmatter}
 
-\title{OASIS: Repairing Stale Optimizer Statistics in the Feedback Nullspace}
+\title{OASIS: Repairing Stale and Correlation-Blind Query-Optimizer Statistics from Query Feedback}
 
 \author[inst1]{Qichu Tian\corref{cor1}}
 \ead{mizukiqwq@stu.xjtu.edu.cn}
@@ -85,32 +87,33 @@
 \address[inst1]{Xi'an Jiaotong University, Xi'an, China}
 
 \begin{abstract}
-Cost-based optimizers plan with column statistics that grow stale between refreshes, and
-query feedback exposes the resulting selectivity errors. Repairing a histogram from
-feedback is underdetermined: a few observed predicates constrain the marginal only where
-they fall and leave the rest free---a region we call the feedback nullspace. Classical
-feedback-consistency methods (STHoles, ISOMER, QuickSel-H) fill this region with an
-optimizer-agnostic default. The deployment question is therefore not how to match the
-observed feedback more tightly, but what to place in the nullspace.
+Cost-based optimizers plan with column statistics that drift stale between refreshes and
+that assume columns are independent; both errors mislead the planner. Query execution
+already exposes them---for every filter predicate the executor reveals the selectivity the
+optimizer mis-estimated---so we ask how far query feedback alone, without rescanning the
+table, can maintain optimizer-facing statistics. We separate two regimes.
 
-We propose OASIS (Optimizer-Aware Statistics Imputation System), a statistics-layer
-middleware that imputes the nullspace with a completion learned against the optimizer's
-own error. A learned imputation layer produces a marginal prior from a composite
-optimizer-facing objective. A calibration layer projects that prior onto the feedback
-and routes among candidates using a deployment-visible signal.
+For a \emph{single} column, feedback determines the marginal up to a small free part, and a
+maximum-entropy projection (the classical ISOMER step) is already near-optimal: we give an
+identifiability condition for when feedback pins the marginal, and show on real datasets,
+against self-tuning histograms and a learned prior, that nothing beats the projection
+there---single-column repair is easy. The optimizer's larger residual error is the
+\emph{independence assumption} on correlated columns, and there feedback helps decisively: a
+feedback-driven joint repair cuts conjunctive-predicate Q-error by up to $31\%$ ($13.6\%$ in
+aggregate) over independence on real correlated columns, the gain concentrated where
+the columns are correlated.
 
-A rank analysis explains when this helps: the gain is concentrated in the nullspace the
-feedback leaves and vanishes once dense feedback pins the marginal. On held-out drift,
-OASIS cuts future-predicate Q-error by $12.8\%$ over ISOMER and also beats STHoles and
-QuickSel-H, with the gain largest where feedback is sparse---a $2.7\times$ advantage at
-the sparsest budget on a real PostgreSQL planner. It also improves a composition family,
-repairs a FactorJoin kernel an uncalibrated prior would harm, and on a TPC-H check tracks
-fresh-statistics behavior without a table scan.
+We package this as OASIS, a statistics-layer
+middleware that maintains optimizer statistics from query feedback between full
+\texttt{ANALYZE} refreshes. Injected into a real PostgreSQL planner, feedback-maintained
+single-column statistics cut row Q-error from $27.8$ to $2.4$ and lift fresh-plan match from
+$56\%$ to $96\%$ without a table scan, and the maintained marginals stay safe for
+composition and join estimators to consume.
 \end{abstract}
 
 \begin{keyword}
-Statistics correction \sep Cardinality estimation \sep Histogram calibration
-\sep Cost-based optimizer \sep Query feedback \sep Underdetermined inverse problem
+Cardinality estimation \sep Query optimization \sep Self-tuning histograms
+\sep Independence assumption \sep Query feedback \sep Statistics maintenance
 \end{keyword}
 
 \end{frontmatter}
@@ -130,76 +133,77 @@ simple and robust, but it leaves a persistent staleness gap: tables keep receivi
 inserts, deletes, and updates while the optimizer plans with the last statistics
 snapshot. As the gap widens, stale histograms induce systematic selectivity errors
 that propagate through the cost model into poor plans
-\cite{leis2015good,moerkotte2009preventing,han2021cardinality,lee2023impact}.
+\cite{leis2015good,moerkotte2009preventing,han2021cardinality,lee2023impact}. A second,
+orthogonal error is structural rather than temporal: per-column statistics carry no
+cross-column information, so the optimizer falls back on the attribute-value-independence
+assumption and systematically mis-estimates conjunctions over correlated columns
+\cite{poosala1997selectivity,leis2015good}.
 
-A DBMS already obtains useful signal while executing ordinary queries. For a filter
-predicate, the optimizer's estimated selectivity and the executor's observed
-selectivity expose a local discrepancy between the stale histogram and the current
-data distribution. Feedback-driven self-tuning histograms turn such observations
-into statistics updates---STHoles, SASH, and ISOMER are the canonical examples
-\cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}---and
-ISOMER in particular makes the underlying principle explicit: among all marginals
-consistent with the observed feedback, choose the \emph{maximum-entropy} one. This
-is a principled but optimizer-agnostic choice: the least-committed completion of the part of
-the marginal that feedback does not determine.
+A DBMS already obtains the signal to repair both errors while executing ordinary queries.
+For a filter predicate, the optimizer's estimated and the executor's observed selectivity
+expose a local discrepancy between the stale statistics and the current data; for a
+conjunction over several columns, the same feedback reveals the joint selectivity the
+independence assumption got wrong. Feedback-driven self-tuning histograms turn such
+observations into statistics updates---STHoles, SASH, and ISOMER are the canonical examples
+\cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}---and ISOMER makes
+the principle explicit: among all distributions consistent with the observed feedback, choose
+the \emph{maximum-entropy} one---the least-committed completion of the part feedback leaves
+undetermined.
 
-The observation that organizes this paper is structural. An equi-depth histogram
-with $B$ buckets has $B-1$ free interior quantile boundaries. A feedback window of
-$K$ predicates constrains the cumulative distribution at the predicates' boundary
-values---at most one independent constraint per distinct boundary. When $K$ is
-small relative to $B$, or when the observed predicates cluster, the feedback pins
-the marginal only along the span of those constraints and leaves the orthogonal
-complement---the \emph{nullspace}---free. Any feedback-consistency method, ISOMER
-included, must \emph{complete} the marginal in that nullspace, and the quality of an
-optimizer-facing statistic is governed by how well it does so on predicates that
-fall where feedback did not. Maximum entropy is one completion; it is not the
-completion that minimizes downstream optimizer error.
+This paper asks a deployment question: \emph{how far can query feedback alone, with no table
+rescan, maintain the statistics a cost-based optimizer actually plans with?} The answer
+splits cleanly into two regimes, and that split is the organizing idea.
 
-This reframing changes the deployment question from ``how do we match the feedback
-better'' to ``what should we put in the nullspace.'' It also sets two boundaries
-that we make quantitative rather than rhetorical. First, a completion can only help
-where a nullspace exists: once feedback saturates the available degrees of freedom, the
-marginal is pinned and \emph{every method applying the same finite projection} coincides. Second, a
-completion learned to reproduce the post-drift histogram---the obvious supervised
-target---does not help either, because reconstruction accuracy is not the same as
-optimizer relevance.
+\emph{Single columns are easy.} An equi-depth histogram with $B$ buckets has only $B-1$ free
+interior boundaries; a feedback window pins the cumulative distribution at the observed
+boundaries and leaves a small free part. We make this precise with an identifiability
+condition (Section~\ref{sec:mechanism}) for when feedback determines the marginal, and we
+find empirically---on real datasets, against self-tuning histograms and against a prior
+trained directly on the optimizer's error---that once the feedback projection is applied,
+\emph{nothing beats the maximum-entropy completion}: a learned model gives no edge over the
+classical ISOMER step. Single-column repair therefore needs no machine learning; the
+principled projection suffices, and we prove and measure when it does.
 
-The resulting system is OASIS (Optimizer-Aware Statistics Imputation System), which imputes the
-feedback nullspace with a learned, optimizer-relevant completion. OASIS has three
-layers. A \emph{conversion layer} maps native engine statistics to a canonical
-distribution view and back (Section~\ref{sec:mcv-adapter}). A \emph{learned imputation
-layer} produces a marginal prior from a compact permutation-invariant model trained on a
-composite objective that scores the projected marginal by its held-out future-predicate
-error, a FactorJoin join-regret term, an in-window feedback-consistency residual, and a
-reconstruction regularizer (Section~\ref{sec:stage1}). A \emph{calibration layer} reuses
-the classical feedback projection as a completion operator over any prior and adds a
-residual-gated router that selects between the learned completion and the maximum-entropy
-default from a deployment-visible signal (Section~\ref{sec:stage2}). In database-engineering
-terms, OASIS is a statistics-\emph{maintenance} technique: it keeps optimizer statistics
-current between full \texttt{ANALYZE} refreshes from query feedback alone, turning a data-administration
-chore into an automated, optimizer-aware repair that requires no base-table rescan. This design yields
-four contributions:
+\emph{Independence is the bottleneck.} The optimizer's larger residual error is the
+independence assumption introduced above. Maximum entropy over a single column cannot touch
+it, but conjunctive feedback can---it directly observes the joint mass independence gets
+wrong. A feedback-driven joint repair (a two-dimensional max-entropy projection onto
+observed conjunctive masses) cuts conjunctive-predicate Q-error by up to $31\%$---$13.6\%$ in
+aggregate---over the independence assumption on real correlated columns, with the gain
+concentrated where the columns are correlated (Section~\ref{sec:crosscol}). This is where feedback
+maintenance earns its keep for the optimizer.
+
+The resulting system is OASIS, a
+statistics-layer middleware that maintains optimizer statistics from query feedback between
+full \texttt{ANALYZE} refreshes, with no base-table rescan. A \emph{conversion layer} maps
+native engine statistics to a canonical distribution view and back
+(Section~\ref{sec:mcv-adapter}); a \emph{repair layer} applies the feedback-consistency
+projection---to a single marginal, and, for correlated columns, to the joint
+(Sections~\ref{sec:stage2}, \ref{sec:crosscol}); and a \emph{safety layer} routes among
+candidate corrections on a deployment-visible signal so an imperfect correction never
+degrades below the maximum-entropy default (Section~\ref{sec:stage2}). Because the correction
+is inserted at the statistics layer, the optimizer's search and cost model are untouched.
+This design yields four contributions:
 \begin{itemize}
-  \item We formulate feedback-driven marginal repair as completion of an
-        \emph{underdetermined} system and give a rank characterization of the
-        nullspace that predicts when a learned prior can help and when it must tie
-        the maximum-entropy projection (Sections~\ref{sec:problem},
-        \ref{sec:mechanism}).
-  \item We train the nullspace completion on a composite optimizer-facing objective
-        and show it beats both reconstruction-trained priors and classical
-        self-tuning histograms wherever feedback under-determines the marginal; an
-        ablation isolates the gain to the objective and shows in-loop projection is
-        inessential (Sections~\ref{sec:design}, \ref{sec:ablation}).
-  \item We show the corrected marginal is safe to consume: it improves a
-        six-estimator composition family by $20\%$--$36\%$, rescues a FactorJoin
-        kernel where the raw prior regresses below stale, and reduces PostgreSQL new
-        plan deviations to $1.1\%$, while a residual-gated router gives the same
-        safety from a deployment-visible signal (Section~\ref{sec:optimizer-facing}).
-  \item We give a primarily optimizer-facing evaluation spanning single-column
-        drift, structural and out-of-distribution generalization, the composition
-        family and FactorJoin kernel, a 12-configuration PostgreSQL planner-only
-        study, a three-seed TPC-H runtime check, and sparse/noisy feedback
-        diagnostics.
+  \item An \emph{identifiability} analysis of feedback-driven repair: a rank condition
+        (Proposition~\ref{prop:pinned}) for when query feedback pins the optimizer-relevant
+        statistic, and when it leaves a free part no consistent method can resolve from
+        feedback alone (Sections~\ref{sec:problem}, \ref{sec:mechanism}).
+  \item A clean \emph{dichotomy}, validated on real data: single-column repair is
+        easy---the maximum-entropy projection is near-optimal, and a learned prior and the
+        self-tuning histograms STHoles and QuickSel-H give no edge over it
+        (Section~\ref{sec:single-column-results})---whereas the independence assumption is
+        the dominant residual optimizer error.
+  \item A \emph{feedback-driven independence repair} that beats the
+        attribute-value-independence assumption by up to $31\%$ ($13.6\%$ aggregate) on real
+        correlated columns, with the gain concentrated where the columns are correlated
+        (Section~\ref{sec:crosscol}).
+  \item \emph{OASIS}, a no-rescan statistics-maintenance middleware validated in a real
+        PostgreSQL planner---feedback-maintained single-column statistics cut row Q-error
+        from $27.8$ to $2.4$ and lift fresh-plan match from $56\%$ to $96\%$---with the
+        maintained marginals shown safe for composition and join estimators to consume and a
+        residual-gated router that never degrades below the maximum-entropy default
+        (Section~\ref{sec:optimizer-facing}).
 \end{itemize}
 
 \section{Background and Problem Formulation}
@@ -225,8 +229,9 @@ QuickSel-H fits a query-driven selectivity model on the same no-rescan interface
 \cite{park2020quicksel}. These methods all take query feedback as input and emit a
 corrected single-column statistic without touching the base data. Their key difference is
 how they complete the parts of the distribution that feedback does not determine. OASIS
-keeps the same interface but learns this completion against optimizer error instead of
-fixing it by maximum entropy or bucket splitting.
+keeps the same interface and the same maximum-entropy completion for a single column; its
+leverage is extending the feedback projection to the cross-column joint and routing among
+candidates for safety.
 
 \subsection{Statistics and Objective}
 
@@ -274,13 +279,13 @@ Feedback repair is underdetermined for an elementary reason. A feedback window r
 true mass on a handful of intervals; between and beyond those intervals, the data can be
 arranged in many ways and still reproduce every observation. The repaired marginal is thus
 \emph{pinned} where feedback falls and \emph{free} everywhere else, and that free
-part---the feedback nullspace (Figure~\ref{fig:nullspace})---is what any repair method must
-fill. The rest of this section makes this precise and measures how large the free part is.
+part (Figure~\ref{fig:nullspace}) is what any repair method must fill. We make this precise
+and measure how large the free part is below.
 
 \begin{figure}[t]
   \centering
   \begin{tikzpicture}[font=\small,>=Stealth]
-    % regions the feedback leaves free (the nullspace)
+    % regions the feedback leaves free (the free part)
     \fill[gray!12] (0,0) rectangle (0.9,3.0);
     \fill[gray!12] (1.7,0) rectangle (3.1,3.0);
     \fill[gray!12] (3.9,0) rectangle (5.0,3.0);
@@ -301,7 +306,7 @@ fill. The rest of this section makes this precise and measures how large the fre
     % labels
     \node[blue!55!black,font=\footnotesize,above] at (1.3,3.0) {pinned};
     \node[blue!55!black,font=\footnotesize,above] at (3.5,3.0) {pinned};
-    \node[gray!45!black,font=\footnotesize,align=center] at (2.4,2.55) {nullspace\\(free)};
+    \node[gray!45!black,font=\footnotesize,align=center] at (2.4,2.55) {free\\part};
     % legend
     \draw[thick] (3.5,0.66) -- (3.9,0.66) node[right,font=\footnotesize]{completion A};
     \draw[thick,dashed,red!65!black] (3.5,0.32) -- (3.9,0.32) node[right,font=\footnotesize,text=black]{completion B};
@@ -309,9 +314,9 @@ fill. The rest of this section makes this precise and measures how large the fre
   \caption{Why feedback repair is underdetermined. A feedback window pins the cumulative
   mass $F$ at the predicate boundaries it observes (dots); on the pinned intervals (blue)
   every consistent completion agrees, but on the regions the feedback leaves free
-  (grey)---the nullspace---completions may differ (solid versus dashed) while still matching
-  every observation. OASIS learns which completion to place in the free regions; classical
-  methods fill them with a fixed default.}
+  (grey)---the free part---completions may differ (solid versus dashed) while still matching
+  every observation---so the free regions are exactly what any repair method must fill, and once
+  feedback pins them no choice remains (Section~\ref{sec:mechanism}).}
   \label{fig:nullspace}
 \end{figure}
 
@@ -328,30 +333,26 @@ that interval mass is an exact sum of cell masses (two such sums for a
 \texttt{BETWEEN}). The feedback window therefore imposes a system of linear equality
 constraints $A m = y$, with $A\in\mathbb{R}^{K'\times C}$. Let
 $r=\mathrm{rank}(A)$. The marginals consistent with the feedback form the affine slice
-$\{m\in\Delta : A m = y\}$, whose free dimension is $(C-1)-r$. We call this free part the
-\emph{nullspace} that the feedback leaves.
+$\{m\in\Delta : A m = y\}$, whose free dimension is $(C-1)-r$. We call this the
+\emph{free subspace} that the feedback leaves.
 
 A deployed histogram exposes only $B-1$ of these $C$ cell boundaries, and on a fixed grid
 the two representations are interchangeable---inverting the implied CDF recovers the cell
 masses from the exposed quantiles. Section~\ref{sec:mechanism} therefore measures an
 \emph{operational} rank on those $B-1$ boundaries---a deployable proxy for
-$\mathrm{rank}(A)$---and turns this nullspace view into the pinned-regime result, measuring
-when a prior can affect the projected marginal.
+$\mathrm{rank}(A)$---and turns this view into the pinned-regime result---when feedback pins the
+projected marginal, and when a free part remains for any prior to fill.
 
 This formulation is deliberately single-column. OASIS does not infer multi-column
 dependence from single-column feedback, and it does not repair join-key dependence,
 physical design, or cost-model calibration. The single-column marginal is nonetheless a
-load-bearing input to the estimators built on top of it: copula, IPF, and
-factorized-join models all factor the joint distribution into one-dimensional marginals
-and a dependence structure, so a stale marginal biases the joint regardless of how
-accurately that structure is modeled. Correcting the marginal therefore propagates to any
-consumer that composes it---as our composition-family
-(Section~\ref{sec:composition-family}) and FactorJoin (Section~\ref{sec:factorjoin})
-experiments show by holding the dependence structure fixed and varying only the marginal.
-Where cross-column correlation or join-key skew is the dominant \emph{residual} error, an
-external dependence model remains necessary, and OASIS is complementary to such a model
-rather than a replacement. We treat the relative size of these error sources as a stated
-assumption, not a measured claim about any production system.
+load-bearing input: copula, IPF, and factorized-join estimators all factor the joint into
+one-dimensional marginals and a dependence structure, so correcting the marginal propagates to
+any consumer that composes it (Sections~\ref{sec:composition-family} and~\ref{sec:factorjoin}
+hold the dependence structure fixed and vary only the marginal). Where cross-column correlation
+or join-key skew is the dominant \emph{residual} error, an external dependence model remains
+necessary and OASIS is complementary to it---an assumption we state rather than measure for any
+one production system.
 
 \section{OASIS Design}
 \label{sec:design}
@@ -361,12 +362,14 @@ assumption, not a measured claim about any production system.
 OASIS is a middleware that sits at the statistics layer, between the statistics store
 and the optimizer, and is organized as three layers (Figure~\ref{fig:architecture}).
 The \emph{conversion layer} (L1, Section~\ref{sec:mcv-adapter}) maps the engine's native
-statistics object to a canonical one-dimensional CDF view and back, so the rest of the
-system is engine-independent. The \emph{imputation layer} (L2, Section~\ref{sec:stage1})
-produces a marginal prior that completes the feedback nullspace; it is the learned
-component, and we refer to it interchangeably as Stage~1. The \emph{calibration layer}
-(L3, Section~\ref{sec:stage2}) projects the prior onto the active feedback and routes
-among candidate marginals; we refer to it as Stage~2.
+statistics object to a canonical distribution view and back, so the rest of the system is
+engine-independent. The \emph{repair layer} (L2) applies the feedback-consistency projection
+that maintains the statistic---to a single marginal (Section~\ref{sec:stage2}) and, for
+correlated columns, to the joint (Section~\ref{sec:crosscol}); it is training-free---no model
+and no offline training (we include a learned prior only as a baseline and find it gives no
+edge, Section~\ref{sec:single-column-results}). The \emph{safety layer} (L3, Section~\ref{sec:stage2}) routes among
+candidate corrections on a deployment-visible signal so an imperfect correction never
+degrades below the maximum-entropy default.
 
 When the optimizer requests a histogram, the request passes down through the three
 layers and back (Figure~\ref{fig:architecture}). Two integration points
@@ -382,22 +385,18 @@ collection adds only bounded per-conjunct bookkeeping.
   \caption{OASIS as a statistics-layer middleware. The existing DBMS query pipeline
   (solid, top) is left unchanged. OASIS runs its own input-to-correction flow (solid): it
   reads the stale histogram $H_0$ and a recent feedback window, then applies conversion
-  (L1), imputation (L2), and calibration (L3) to emit a corrected histogram $\hat H$. It
+  (L1), feedback projection (L2), and safety routing (L3) to emit a corrected histogram $\hat H$. It
   attaches to the pipeline only through the dashed integration hooks---tapping predicate
   feedback from the executor and substituting $\hat H$ into the statistics the optimizer
-  reads. Only L2 is learned; L1 and L3 are deterministic.}
+  reads. All three layers are deterministic; L2 is the training-free feedback projection.}
   \label{fig:architecture}
 \end{figure}
 
-\emph{OASIS} names the approach---the learned prior completed by feedback
-projection---and in its default deployed form applies the hard projection. Its internal
-candidates---the unprojected prior (OASIS-noProj) and a consistency-gated Soft
-projection---and the residual-gated Router that selects among $\{$stale, ISOMER,
-OASIS-noProj, OASIS, Soft$\}$ are detailed in Stage~2 (Section~\ref{sec:stage2}). The two
-deployable recommendations are OASIS (default) and Router (when a deployment-visible
-fallback is wanted). The external baselines are the stale histogram and ISOMER (the
-maximum-entropy projection initialized from stale), together with the self-tuning
-histograms STHoles and QuickSel-H.
+\emph{OASIS} names the approach---feedback-consistency repair guarded by a safety
+router---and in its default deployed form applies the hard projection, with the residual-gated
+Router (detailed in Section~\ref{sec:stage2}) as the fallback. The external baselines are the
+stale histogram and ISOMER (the maximum-entropy projection initialized from stale), together
+with the self-tuning histograms STHoles and QuickSel-H.
 
 \subsection{Statistics-Format Conversion}
 \label{sec:mcv-adapter}
@@ -412,7 +411,7 @@ back into native fields. The round trip preserves total mass to machine precisio
 selectivity estimates consistent (global MAE $1.1\times10^{-4}$, worst case below
 $0.39\%$), and completes in $0.066$--$0.073$\,ms.
 
-Only the conversion layer is engine-specific; the imputation and calibration layers
+Only the conversion layer is engine-specific; the projection and routing layers
 operate on the canonical CDF and are unchanged across systems. Porting OASIS to a new
 engine therefore reduces to writing one adapter. The effort depends on how the engine
 exposes single-column statistics. MySQL and MariaDB keep equi-height/equi-width histograms
@@ -426,148 +425,111 @@ not expose an editable histogram object would require correcting statistics thro
 maintenance API rather than in place. We validate the PostgreSQL adapter end-to-end; the
 others are design targets, not claims, but they share the same canonical interface.
 
-\subsection{Stage 1: A Prior Trained Against Optimizer Error}
-\label{sec:stage1}
-
-The Stage-1 component supplies the nullspace completion. The central design choice is
-the \emph{training objective}, not the architecture: we train the prior so that, after
-feedback projection, the resulting marginal is a good optimizer input---not so that it
-reconstructs the post-drift histogram.
-
-The prior generator consumes a fixed tensor with four blocks: normalized stale
-quantile boundaries, lightweight metadata, up to $K$ recent predicate-feedback
-observations, and a validity mask. We use $B{=}10$ and $K{=}16$, small enough for
-planning-time use. The generator is a compact permutation-invariant set encoder over
-the stale-quantile and feedback tokens with a residual head that predicts corrections
-to interior quantile boundaries; the output is clamped and monotonized to a valid CDF.
-Permutation invariance over feedback tokens matches the unordered nature of an
-observation window and lets the same model consume any $K$.
-
-Let $p_\theta$ be the prior marginal and $\Pi$ the feedback projection. We train
-$\theta$ to minimize
-\begin{equation}
-  \label{eq:composite}
-  \begin{split}
-  \mathcal{L} = {}& w_{\text{fut}}\,\mathrm{QErr}_{\log}\!\big(\Pi(p_\theta),\sigma_{\text{fut}}\big)
-              + w_{\text{join}}\,\mathrm{Regret}_{\text{FJ}}\!\big(\Pi(p_\theta)\big) \\
-              &+ w_{\text{cons}}\,\rho_{\text{fb}}(p_\theta)
-              + w_{\text{reg}}\,\lVert p_\theta - p_{\text{fresh}}\rVert_1,
-  \end{split}
-\end{equation}
-where $\mathrm{QErr}_{\log}$ is the held-out future-predicate log-Q-error,
-$\mathrm{Regret}_{\text{FJ}}$ a differentiable FactorJoin bin-mass join regret,
-$\rho_{\text{fb}}$ the in-window feedback residual, and the last term a light
-reconstruction regularizer toward the post-drift marginal. The first two terms make
-the objective \emph{optimizer-facing}: the model is rewarded for the selectivity and
-join estimates the projected marginal induces, evaluated on predicates it has not
-seen, not for matching a histogram. Training uses a sparse-to-dense feedback
-curriculum and a domain-randomized mixture of drift families so the completion
-generalizes across feedback budgets and drift mechanisms;
-Section~\ref{sec:ablation} shows that the reconstruction and consistency
-regularizers, not the optimizer terms alone, are what keep the dense-feedback regime
-from collapsing.
-
-Two caveats: $\Pi$ appears inside the loss, but the ablation
-(Section~\ref{sec:ablation}) shows post-hoc projection performs as well, so
-``calibration in the loop'' is not the mechanism; and the reconstruction term is only a
-regularizer---trained on reconstruction \emph{alone}, the model is worse than the
-classical priors. The prior is trained offline and reused across columns without
-per-table retuning.
-
-\subsection{Stage 2: Feedback Projection and the Router}
+\subsection{The Repair Layer: Feedback Projection and the Router}
 \label{sec:stage2}
 
-Stage~2 completes the prior in the feedback-constrained subspace and decides, per
-case, whether to trust the learned completion or fall back to the maximum-entropy one.
+The repair layer projects an input histogram onto the active feedback so
+the result is consistent with what the executor observed, and a light router guards the
+deployed correction. The same operator serves the single marginal and, in two dimensions, the
+cross-column joint (Section~\ref{sec:crosscol}).
 
-The hard operator adapts the ISOMER/IPF feedback-consistency
-projection~\cite{markl2007consistent} to act on a supplied prior: it builds the
-interval partition induced by the active feedback predicates, initializes cell masses
-from the prior, and performs cyclic I-projections until every active predicate's
-interval mass matches its observed selectivity. When sequential drift makes the
-active set inconsistent, the oldest constraints are dropped first. The operator is not
-new; its role here is to realize the completion picture of
-Section~\ref{sec:problem}---it pins the marginal exactly on the feedback span and
-leaves the learned prior to occupy the nullspace---and to provide the safe form for
-joins and the planner.
+The hard operator is the ISOMER/IPF feedback-consistency
+projection~\cite{markl2007consistent}: it builds the interval partition induced by the active
+feedback predicates, initializes cell masses from the input histogram (the stale marginal, or
+the independence grid for a joint), and performs cyclic I-projections until every active
+predicate's interval mass matches its observed selectivity. When sequential drift makes the
+active set inconsistent, the oldest constraints are dropped first. The operator is not new;
+its role here is to realize the picture of Section~\ref{sec:problem}---it pins the statistic
+exactly on the feedback span and leaves the maximum-entropy default elsewhere---and to provide
+the safe form for joins and the planner.
 
 On future single-column predicates, matching a handful of recent intervals exactly can
 overfit; a soft operator that minimizes
-$\mathrm{KL}(p\,\|\,p_{\text{prior}}) + \lambda \sum_j w_j (A_j p - y_j)^2$ over the
-same partition generalizes slightly better, with $w_j=\exp(-(\text{conflict}_j/\tau)^2)$
-down-weighting feedback that the most recent observations contradict. A banded
-relaxation of the equality constraints, by contrast, monotonically worsens accuracy as
-the band widens, so the soft operator's small edge comes from better cell-level
-conditioning, not from looser matching. We keep Soft as a router candidate but, given
-the ablation (Section~\ref{sec:ablation}), do not build the contribution on it.
+$\mathrm{KL}(p\,\|\,p_{\text{prior}}) + \lambda \sum_j w_j (A_j p - y_j)^2$ over the same
+partition generalizes slightly better, with $w_j=\exp(-(\text{conflict}_j/\tau)^2)$
+down-weighting feedback the most recent observations contradict. We keep it as a router
+candidate but do not build on it.
 
-No single operator dominates: hard projection is safest on joins and the planner, while the
-learned completion wins on sparse single-column feedback. The Router selects, per case,
-the candidate with the lowest \emph{in-window feedback residual}: the mean absolute
-discrepancy, computed over the \emph{full} recent observation window, between a candidate's
-estimate and the observed selectivity.
+For robustness the deployed system can route among candidates---stale, the hard projection
+(ISOMER), and the soft projection---selecting, per case, the one with the lowest
+\emph{in-window feedback residual}: the mean absolute discrepancy, over the full recent
+observation window, between a candidate's estimate and the observed selectivity. The gate
+never observes test predicates, true cardinalities, runtimes, or plan shapes, and because the
+pool contains the hard projection it can only lower the in-window residual. It is a fallback
+that reverts to the maximum-entropy projection when a candidate over-extrapolates, not a
+plan-shape guarantee; a plan-shape-aware gate is left to future work
+(Section~\ref{sec:limitations}). On the planner configurations it selects ISOMER throughout
+(Section~\ref{sec:postgres-planner}).
 
-This signal discriminates among candidates for two reasons, even though hard projection
-matches its active constraints exactly. First, the pool is not uniformly exact-matching:
-the stale histogram and the raw prior (OASIS-noProj) apply no projection and leave a large
-residual, and the Soft candidate matches only approximately, so the residual cleanly
-separates these from the projected candidates. Second, the projection enforces only the
-\emph{consistent active subset}---under sequential drift the stale-feedback filter drops
-the oldest constraints when the active set becomes inconsistent---so the full-window
-residual measures how well each candidate fits the constraints just outside its own
-enforced set, where ISOMER (seeded from stale) and OASIS (seeded from the learned prior)
-differ. Between candidates that enforce the same active set the residuals are nearly
-identical, and ties break deterministically toward the safer projection.
-
-The gate never observes test predicates, true cardinalities, runtimes, or plan shapes, so
-it is non-oracle, and because it minimizes residual over a pool containing the hard
-projection, it cannot increase the in-window residual relative to that pool. This
-guarantees a property of the \emph{residual}, not of plan shape: what it buys empirically,
-on the workloads we evaluate, is a fallback that reverts to the maximum-entropy baseline
-wherever the learned completion over-extrapolates (Section~\ref{sec:optimizer-facing}),
-selecting the learned completion where free degrees of freedom exist and reverting to
-ISOMER once the marginal is pinned; a plan-shape-aware gate is left to future work
-(Section~\ref{sec:limitations}). A diagnostic over the proxy cases (supplementary material)
-confirms the Router beats always-ISOMER, always-OASIS, and a random projected choice and
-approaches an offline oracle in aggregate, while its residual signal agrees with the
-oracle's per-case choice only $42\%$ of the time and does not bound the worst
-case---the evidence behind treating it as a fallback, not a guarantee.
-
-\section{Analysis of the Feedback Nullspace}
+\section{Identifiability: When Feedback Pins the Statistic}
 \label{sec:mechanism}
 
-Section~\ref{sec:problem} framed feedback repair as filling the free degrees of freedom
-the feedback leaves---its nullspace. That same view bounds what any learned completion can
-do, and lets us quantify how the free dimension shrinks as feedback accumulates.
+Section~\ref{sec:problem} framed feedback repair as constraining a distribution the
+observations leave only partly determined. This section makes the \emph{identifiability}
+question precise: when does query feedback pin the optimizer-relevant statistic, and when
+does it leave a free part that no feedback-consistent method can resolve from feedback alone?
+We answer with a rank condition and quantify how the free dimension shrinks as feedback
+accumulates.
 
-In the \emph{pinned regime} this bound becomes exact. Fix the cell-mass representation
-above and assume the feedback is consistent and noise-free. Consider any method that
-returns a consistent marginal by applying the \emph{same} hard projection $\Pi$ (the
-I-projection onto $\{m\in\Delta : A m = y\}$) to its own prior. If the constraints
-identify the marginal within this representation (full rank, $r = \dim\Delta$), then the
-consistent set is a single point, and \emph{every such method returns that same marginal
-regardless of its prior}; in particular ISOMER and the projection of the OASIS prior
-coincide. Two priors can differ in their projected output only on the nullspace of $A$, of
-dimension $\dim\Delta - r$.
+We now state the pinned regime precisely.
 
-This pinned-regime result is simple but central: the entire opportunity for a
-learned prior lives in the nullspace, and the opportunity vanishes continuously as
-feedback saturates the constraints. ISOMER fills the nullspace with maximum
-entropy~\cite{markl2007consistent}; STHoles and QuickSel-H fill it with their own
-structural assumptions. It concerns \emph{any prior closed by the same
-projection}, not the native STHoles or QuickSel-H algorithms, which need not reduce to
-this I-projection. Our evaluation makes the comparison like-for-like by applying the
-same projection operator to every prior (Section~\ref{sec:projection-init}), the setting
-in which the pinned-regime coincidence holds. The question OASIS answers is what
-completion minimizes \emph{downstream optimizer error}.
+\begin{proposition}[Pinned regime]
+\label{prop:pinned}
+Adopt the cell-mass representation of Section~\ref{sec:problem}: the histogram grid and the
+distinct active feedback endpoints partition the domain into $C$ cells, the marginal is the
+cell-mass vector $m\in\Delta=\{m\in\mathbb{R}^{C}:m\ge 0,\ \mathbf{1}^\top m=1\}$ with
+$\dim\Delta=C-1$, and the active feedback is \emph{consistent and noise-free}, written
+$Am=y$ with $A\in\mathbb{R}^{K'\times C}$ and $r=\operatorname{rank}(A)$, the normalization
+$\mathbf{1}^\top m=1$ being independent of the rows of $A$. Let $\Pi$ be the $I$-projection
+onto the feasible set $F=\{m\in\Delta:Am=y\}$, applied identically to every method's prior,
+and let $N=\ker A\cap\ker\mathbf{1}^\top$, so $\dim N=(C-1)-r$. Then:
+\begin{enumerate}
+  \item for any two priors $p,p'$ the projected marginals satisfy $\Pi(p)-\Pi(p')\in N$,
+        so two priors can differ in their projected output \emph{only} on the
+        $((C-1)-r)$-dimensional free subspace $N$; and
+  \item if $r=C-1$ (the feedback identifies the marginal in this representation) then
+        $N=\{0\}$ and $F$ is a single point, so $\Pi(p)=\Pi(p')$ for \emph{every} pair of
+        priors. In particular the projections of the stale histogram (ISOMER) and of any
+        other prior return the identical marginal.
+\end{enumerate}
+\end{proposition}
 
-Before the empirical ladder, we make this prediction quantitative, because it governs
-how every later result should be read. An equi-depth
+\begin{proof}[Proof sketch]
+The $I$-projection onto a nonempty closed convex set returns a point of that set, so
+$\Pi(p),\Pi(p')\in F$ and both satisfy $Am=y$ and $\mathbf{1}^\top m=1$. Their difference
+$d=\Pi(p)-\Pi(p')$ therefore obeys $Ad=0$ and $\mathbf{1}^\top d=0$, i.e.\ $d\in N$, which
+proves~(i). For the dimension, $N$ is the intersection of $\ker A$ (codimension $r$) with
+the normalization hyperplane $\ker\mathbf{1}^\top$ (codimension $1$), and the two are
+independent by assumption, so $\dim N=C-1-r$. When $r=C-1$ we get $\dim N=0$; the feasible
+set $F$ is nonempty by consistency, hence a single point onto which every prior projects,
+which proves~(ii).
+\end{proof}
+
+Two qualifications fix the scope of Proposition~\ref{prop:pinned}. First, the coincidence
+in~(ii) concerns \emph{any prior closed by the same projection} $\Pi$, not the native
+STHoles or QuickSel-H algorithms, which need not reduce to this $I$-projection; our
+evaluation makes the comparison like-for-like by applying the same operator to every prior
+(Section~\ref{sec:projection-init}), the setting in which the coincidence holds. Second, the
+rank $r$ above is the \emph{exact} cell-level $\operatorname{rank}(A)$, whereas
+Table~\ref{tab:mr_rank} reports an \emph{operational} rank on the $B-1$ exposed histogram
+boundaries (Section~\ref{sec:problem})---a deployable proxy for $r$, not $r$ itself.
+
+The Proposition is an \emph{identifiability} statement: when the feedback is rank-deficient
+($r<C-1$) a free part $N$ remains, and \emph{no} feedback-consistent method can resolve it
+from feedback alone---every such method must commit to some default there. ISOMER commits to
+maximum entropy~\cite{markl2007consistent}, the least-committed choice; STHoles and
+QuickSel-H commit to their own structural assumptions. Whether \emph{anything} can beat the
+maximum-entropy default inside $N$ is then an empirical question, and the answer depends
+sharply on dimension: for a single column it cannot
+(Section~\ref{sec:single-column-results}), whereas for the cross-column joint it can, because
+conjunctive feedback supplies the joint information the single-column free part never sees
+(Section~\ref{sec:crosscol}).
+
+We now make this prediction quantitative, since it governs how every later result should be
+read. An equi-depth
 marginal with $B{=}10$ buckets exposes $B-1=9$ free interior boundaries. For each held-out
 case we count the independent feedback constraints (distinct interior boundary
-anchors, merged within tolerance) and the residual free degrees of freedom (DOF); as
-Section~\ref{sec:problem} notes, this is an operational rank on the exposed boundaries, a
-proxy for the exact cell-level $\mathrm{rank}(A)$ rather than $\mathrm{rank}(A)$ itself.
+anchors, merged within tolerance) and the residual free degrees of freedom (DOF).
 Table~\ref{tab:mr_rank} reports the mean rank and free DOF as a function of the
 feedback budget $K$.
 
@@ -576,7 +538,7 @@ feedback budget $K$.
   \caption{Feedback-constraint rank and residual free degrees of freedom (DOF) of the
   marginal versus feedback budget $K$. We report an \emph{operational} rank on the
   $B{-}1=9$ exposed histogram boundaries---a deployable proxy for the exact cell-level
-  $\mathrm{rank}(A)$ (Section~\ref{sec:problem}). Free DOF is the nullspace dimension the
+  $\mathrm{rank}(A)$ (Section~\ref{sec:problem}). Free DOF is the free-subspace dimension the
   projection leaves for the prior to complete; once feedback saturates the DOF the
   marginal is pinned and every method applying the same projection coincides
   (the pinned regime).}
@@ -599,69 +561,57 @@ feedback budget $K$.
 The free DOF collapses from $6.68$ at $K{=}2$ to $\approx 0$ once the feedback
 constraints saturate the $B-1$ boundaries---here by $K{\geq}12$ on this
 constraint-spanning predicate population, with $73\%$ of marginals already pinned at
-$K{=}8$. The nullspace is therefore a property of \emph{which regions of the domain the
-feedback constrains}, not merely of how many observations there are: a finite window
-pins the marginal near the observed predicates and leaves it free elsewhere. This
-predicts two signatures the rest of the paper confirms. (i) \emph{Spatially}, the
-learned completion should win most on predicates that fall far from any feedback,
-directly in the nullspace, and least where the feedback already pins the marginal; the
-feedback-locality bins (Figure~\ref{fig:feedback_locality}) measure exactly this. (ii)
-\emph{At saturation}, when a feedback window densely covers the queried region and drives
-the rank to $B-1$, the marginal is pinned and OASIS must converge to ISOMER in the
-pinned regime; the dense PostgreSQL planner regime
-(Section~\ref{sec:postgres-planner}) is where this tie appears. A prior given more
-feedback context fills the \emph{residual} nullspace better, not less, so the
-completion's advantage persists---and even grows---across feedback budgets
-(Figure~\ref{fig:feedback_budget}) until the constraints actually saturate.
+$K{=}8$. The free part is therefore a property of \emph{which regions of the domain the
+feedback constrains}, not merely of how many observations there are: a finite window pins
+the marginal near the observed predicates and leaves it free elsewhere. Two consequences
+follow. (i) \emph{At saturation} the marginal is pinned and projection-based methods coincide
+(Proposition~\ref{prop:pinned}); the dense PostgreSQL planner regime
+(Section~\ref{sec:postgres-planner}) is exactly this tie. (ii) \emph{Below saturation} a free
+part remains, but---as Section~\ref{sec:single-column-results} shows on real data---for a
+single column the maximum-entropy default already fills it near-optimally, so the residual
+free dimension is not an opportunity any prior can exploit. The exploitable structure
+lies one level up, in the cross-column joint (Section~\ref{sec:crosscol}).
 
 \section{Experimental Methodology}
 \label{sec:experiments}
 
-The evaluation is primarily \emph{planner-facing}: we measure the corrected
-statistics object together with the row estimates and plan shapes a real PostgreSQL
-optimizer derives from it, plus one deliberately narrow TPC-H runtime check
-confirming that calibrated statistics track fresh-statistics execution time. We
-do not claim broad query-runtime superiority over the stale baseline.
+Our evaluation follows a maintained statistic along its deployment path, asking at each level
+the one question that level can answer. We first establish the \emph{single-column} object on
+real data: feedback projection repairs the stale marginal, and the maximum-entropy completion
+is near-optimal---a learned prior and the self-tuning histograms give no edge
+(Section~\ref{sec:single-column-results}). We then move one level up, to the \emph{cross-column}
+joint, where feedback repairs the independence assumption that per-column statistics
+structurally cannot (Section~\ref{sec:crosscol}). Finally we hand the corrected statistics to
+real downstream consumers---composition estimators, a join kernel, and a live PostgreSQL
+planner---and ask whether they stay safe (Section~\ref{sec:optimizer-facing}). The evaluation
+is deliberately \emph{planner-facing}: we report the corrected statistics object together with
+the row estimates and plan shapes a real optimizer derives from it, and use runtime only as a
+single narrow TPC-H reality check that calibrated statistics track fresh-statistics behavior,
+not as a claim of wall-clock superiority over stale statistics.
 
-The evaluation follows the deployment path of a marginal statistic. We first
-establish the corrected single-column object: the prior carries optimizer-relevant
-drift signal, its advantage is concentrated in the nullspace as
-Section~\ref{sec:mechanism} predicts, the gain comes from the composite objective,
-and the same calibration works for non-OASIS priors. We then probe external validity, widening from synthetic
-drift to unseen families, event streams, and a real trace. Finally we ask whether the
-corrected marginal stays safe once downstream estimators and a real planner consume it.
-
-Unless stated otherwise, the prior is trained on a domain-randomized drift mixture and
-evaluated on held-out drift intensities $q\in\{1,3,5,10,15,20,25,30\}$; per-intensity
-tables report a representative subset of this grid (e.g., $q\in\{1,5,10,20,30\}$). All
-feedback-driven methods consume the same observation budget $K{=}16$ and emit
-corrected quantiles on the same $B{=}10$ grid. We group the baselines into three classes. (i) \emph{True self-tuning histograms}:
-STHoles~\cite{bruno2001stholes} and ISOMER~\cite{markl2007consistent}, run as their
-published feedback-driven algorithms. (ii) An \emph{adapted histogram-interface baseline}:
-QuickSel-H~\cite{park2020quicksel}, which exposes QuickSel's density estimate on the shared
-$B{=}10$ grid; it is a faithful adaptation to the common output interface, not a
-line-by-line reproduction (the adaptation is detailed in the supplement). (iii) An
-\emph{internal learned query-driven control}, LQM, which fits a monotone sigmoid-basis
-network to the same feedback window online, in the style of learned query-driven
-estimators~\cite{kipf2019learned,li2023alece} but restricted to the single-column
-statistics-repair setting and the same no-rescan inputs. Because QuickSel-H and LQM are
-matched-interface stand-ins rather than the published systems, we draw no claim of
-superiority over learned cardinality estimators in general; they calibrate where a
-flexible feedback-only fit lands relative to the trained completion.
-In result tables, the \emph{OASIS} column is its default deployed form and OASIS-noProj
-the unprojected control; some tables label the residual-gated selector \emph{Hybrid} and
-others \emph{Router}---the same selector, to be read as the deployed router.
+Unless stated otherwise, every feedback-driven method consumes the same observation budget
+$K{=}16$ and emits corrected quantiles on the same $B{=}10$ grid; where a drift intensity $q$
+is reported (Sections~\ref{sec:composition-family}, \ref{sec:factorjoin}) it scales how far
+the post-drift distribution moves from the snapshot. The baselines fall into three classes:
+(i) \emph{true self-tuning histograms}---STHoles~\cite{bruno2001stholes} and
+ISOMER~\cite{markl2007consistent}, run as their published feedback-driven algorithms;
+(ii) an \emph{adapted histogram-interface baseline}, QuickSel-H~\cite{park2020quicksel},
+exposing QuickSel's density estimate on the shared grid (a faithful interface adaptation, not a
+line-by-line reproduction); and (iii) an \emph{internal learned query-driven control}, LQM, a
+monotone sigmoid-basis network fit online to the same feedback window, in the style of learned
+query-driven estimators~\cite{kipf2019learned,li2023alece} but restricted to single-column
+repair with the same no-rescan inputs. QuickSel-H and LQM are matched-interface stand-ins, not
+the published systems---they calibrate where a flexible feedback-only fit lands relative to the
+projection, and we draw no general claim against learned cardinality estimators. In the result
+tables the \emph{OASIS} column is the deployed feedback projection, \emph{Unproj.\ prior} the
+same correction \emph{without} that projection (a control), and the residual-gated selector
+appears as \emph{Hybrid} or \emph{Router} (the same selector).
 
 Every method starts from the \emph{same} stale
 statistics, sees the \emph{same} feedback window, is projected onto the \emph{same}
 constraints, and is evaluated on the \emph{same} held-out split; no method receives
 oracle access, and ``fresh'' is computed from the post-drift data only as an accuracy
-upper bound. Table~\ref{tab:metrics} defines the metrics used throughout. For
-sensitivity diagnostics we also use a transparent optimizer-decision proxy: future
-predicates are drawn from held-out distributions, each statistics state selects scan
-and join choices under a fixed cost proxy, and the choice is scored by its true proxy
-cost. The proxy analyzes feedback-budget and noise behavior; it is not a runtime
-benchmark.
+upper bound. Table~\ref{tab:metrics} defines the metrics used throughout.
 
 \begin{table}[t]
   \centering\small
@@ -699,284 +649,143 @@ $q\in\{1,\dots,30\}$ to cover mild to severe staleness. The drift \emph{families
 (batch loads, range and date-band shifts, skew evolution, outlier bursts, multimodal and
 seasonal mixtures) are the update patterns that workload-evolution and learned-estimator
 drift studies report as the practical causes of estimator degradation
-\cite{li2022warper,negi2023robust,lee2023impact,han2024bytecard}, and the DML traces of
-Section~\ref{sec:traces} reproduce several of them as explicit insert/update/delete
-streams. We treat the drift model as a stated, transparent assumption rather than a
-claim about any single production system.
+\cite{li2022warper,negi2023robust,lee2023impact,han2024bytecard}. We treat the drift model
+as a stated, transparent assumption rather than a claim about any single production system.
 
 \section{Empirical Evaluation}
 \label{sec:evaluation}
 
-\subsection{Single-Column Correction}
+\subsection{Single-Column Repair: the Projection Is Near-Optimal on Real Data}
 \label{sec:single-column-results}
-
-\subsubsection{The Learned Completion versus Classical Priors}
 \label{sec:projection-init}
 
-We hold the projection operator and feedback constraints fixed and vary only the
-marginal that initializes the projection: stale (which yields ISOMER), the
-self-tuning histograms STHoles and QuickSel-H, the learned OASIS prior, and the
-post-drift fresh marginal as an upper bound. All variants are scored on held-out
-future predicates.
+The decisive single-column test is on real data. We draw individual columns from three
+standard datasets (Power, Forest/Covtype, Census), drive drift with a sliding window over the
+column in file order, and repair each column from a feedback window of $K$ observations. The
+learned prior is trained \emph{only} on a disjoint pool of real columns (Wine Quality, Bike
+Sharing) and never sees the test datasets. Every method initializes the \emph{same} feedback
+projection; all are scored on held-out future predicates.
 
-\begingroup
-\oasisUseMaxWidthResize{.96\textwidth}
-\input{../experiments/results/proj_v3/table_projection_initialization.tex}
-\endgroup
+\input{../experiments/results/real_singlecol_v1/table_real_singlecol.tex}
 
-\begingroup
-\oasisUseMaxWidthResize{.96\textwidth}
-\input{../experiments/results/proj_v3/table_projection_init_classical.tex}
-\endgroup
+Two things stand out in Table~\ref{tab:real_singlecol}. First, feedback repair works: the
+maximum-entropy projection (ISOMER) cuts stale Q-error sharply---Forest from $1.77$ to
+$1.13$, Power from $1.51$ to $1.18$---confirming that query feedback maintains a single-column
+statistic well with no table rescan. Second, and central to this paper's design, \emph{no
+method beats the projection}: STHoles, QuickSel-H, and the learned prior all land within
+$1$--$2\%$ of ISOMER, at both dense ($K{=}16$) and sparse ($K{=}2$) feedback. The
+maximum-entropy completion is already near-optimal for a single column, exactly as the
+identifiability analysis (Section~\ref{sec:mechanism}) leads one to expect: the free part a
+single column leaves is small and carries little structure a learned model can exploit beyond
+the least-committed default. \emph{Single-column repair therefore needs no machine learning};
+we adopt the training-free projection and turn, in Section~\ref{sec:crosscol}, to the
+cross-column setting where feedback genuinely helps.
 
-Tables~\ref{tab:projection_initialization} and \ref{tab:projection_init_classical} give
-the central single-column result. Initializing the same projection from the
-learned completion lowers aggregate future-predicate Q-error from $1.523$ (ISOMER) to
-$1.328$, a $12.8\%$ reduction, and---unlike a reconstruction-trained prior---it also
-beats the classical self-tuning histograms, by $6.1\%$ over STHoles ($1.415$) and
-$5.7\%$ over QuickSel-H ($1.407$). The advantage grows with drift, reaching
-$+15.2\%$, $+22.2\%$, and $+19.6\%$ over ISOMER at $q{=}10$, $20$, and $30$, and the
-fresh-initialized lower bound ($1.151$) confirms headroom remains. That the learned
-completion beats two strong classical completions under the \emph{same} projection
-shows that the gain is in what fills the nullspace, not in how the feedback is matched.
+\subsection{Repairing the Independence Assumption from Feedback}
+\label{sec:crosscol}
 
-\subsubsection{The Gain Lives in the Nullspace: Distance and Budget}
-\label{sec:locality}\label{sec:budget}
+Single-column repair is the \emph{easy} regime: once the feedback projection is applied, the
+maximum-entropy completion is near-optimal and a learned prior adds nothing
+(Section~\ref{sec:single-column-results}). The optimizer's larger error is structural---the
+attribute-value-independence (AVI) assumption, under which a conjunction's selectivity is the
+product of the per-column selectivities. For correlated columns this is wrong no matter how
+accurate each marginal is~\cite{poosala1997selectivity,leis2015good}, and no amount of
+single-column repair can fix it. Query feedback, however, observes exactly the quantity AVI
+gets wrong: the executor returns the true selectivity of a \emph{conjunctive} predicate.
 
-Section~\ref{sec:mechanism} predicts the learned completion should help most where
-feedback did not reach. Two complementary cuts confirm this---across \emph{space} (a
-predicate's distance to feedback) and across \emph{budget} (the size of the feedback
-window). The first cut bins each held-out predicate by the directed Hausdorff distance from
-its endpoints to the nearest feedback endpoint in fresh-CDF space.
+We test whether conjunctive feedback can repair the joint. For a pair of columns we form the
+true joint on a $G\times G$ grid ($G{=}12$); the AVI baseline is the outer product of the
+\emph{true} marginals---the best case for independence, which isolates the correlation error
+from any marginal error. The feedback estimate is a two-dimensional max-entropy (IPF)
+projection that starts from the AVI grid and rescales it to match $K{=}16$ observed
+conjunctive rectangle masses---the natural two-dimensional analogue of the single-column
+ISOMER projection. Both are scored on held-out conjunctive rectangle predicates by
+geometric-mean Q-error. We use eight real correlated column pairs drawn from the same public
+datasets as the rest of the evaluation (Wine Quality, Bike Sharing, Forest/Covtype, Census,
+Power), spanning weak to strong correlation.
 
-\begin{figure}[t]
-  \centering
-  \begin{tikzpicture}
-    \begin{axis}[
-        width=.94\columnwidth, height=5.7cm,
-        ybar=1.5pt, bar width=13pt,
-        ymin=1.0, ymax=2.0,
-        ytick={1.0,1.2,1.4,1.6,1.8,2.0},
-        title={\small Geometric-mean selectivity Q-error\quad($\downarrow$ better; fresh $=1.0$)},
-        title style={yshift=1pt},
-        symbolic x coords={near ($\leq$0.05),mid ($\leq$0.15),far ($>$0.15)},
-        xtick=data, xtick style={draw=none},
-        xlabel={held-out predicate distance to nearest feedback endpoint},
-        xlabel style={yshift=3pt},
-        ymajorgrids, grid style={gray!20},
-        enlarge x limits=0.32,
-        tick label style={font=\small}, label style={font=\small},
-        legend style={at={(0.5,-0.28)}, anchor=north, legend columns=-1,
-          font=\small, draw=none, column sep=12pt},
-      ]
-      \addplot[fill=blue!15,draw=blue!40!black] coordinates {(near ($\leq$0.05),1.424) (mid ($\leq$0.15),1.561) (far ($>$0.15),1.819)};
-      \addplot[fill=blue!60!black,draw=blue!55!black] coordinates {(near ($\leq$0.05),1.295) (mid ($\leq$0.15),1.335) (far ($>$0.15),1.433)};
-      \legend{ISOMER (stale start), OASIS (learned)}
-      \node[font=\footnotesize,text=blue!45!black,anchor=south] at (axis cs:{near ($\leq$0.05)},1.46) {$+9.1\%$};
-      \node[font=\footnotesize,text=blue!45!black,anchor=south] at (axis cs:{mid ($\leq$0.15)},1.60) {$+14.5\%$};
-      \node[font=\footnotesize,text=blue!45!black,anchor=south] at (axis cs:{far ($>$0.15)},1.86) {$+21.2\%$};
-    \end{axis}
-  \end{tikzpicture}
-  \caption{Feedback-locality diagnostic: geometric-mean selectivity Q-error for ISOMER and
-  the learned OASIS completion, with held-out predicates binned by distance from the
-  nearest feedback endpoint (fresh $=1.0$ is the ideal floor). Both degrade as predicates
-  move into the nullspace, but OASIS stays lower and its advantage over ISOMER grows
-  monotonically---$+9.1\%$ near feedback, where the projection already pins the marginal,
-  to $+21.2\%$ far inside the nullspace---the spatial signature of a completion.}
-  \label{fig:feedback_locality}
-\end{figure}
+\input{../experiments/results/crosscol_feedback_v1/table_crosscol_feedback.tex}
 
-Figure~\ref{fig:feedback_locality} confirms the prediction: OASIS's gain over ISOMER
-rises monotonically from $9.1\%$ near feedback (distance $\leq 0.05$), through $14.5\%$ in
-the mid band, to $21.2\%$ far inside the nullspace ($>0.15$)---the spatial signature of a
-completion, where the constraints fix the marginal near observations and the learned
-prior supplies the rest.
+Table~\ref{tab:crosscol_feedback} reports the result, and it follows the structure the
+analysis predicts. Where the columns are essentially independent (Census \texttt{age}/\texttt{hours},
+$r{=}0.07$) feedback repair barely moves the estimate ($+3.9\%$): there is no correlation to
+recover and AVI is already right. Where the columns are correlated, feedback repair wins
+decisively---from $+7\%$ to $+31\%$ across the correlated pairs, largest on the strongly
+dependent \texttt{casual}/\texttt{cnt} pair, for a $13.6\%$ aggregate reduction in conjunctive
+Q-error over AVI. The gain follows the \emph{presence} of correlation---vanishing as columns
+approach independence---rather than scaling strictly with $|r|$. Unlike the single-column
+case, the cross-column information that independence discards is large and
+\emph{feedback-fillable}: conjunctive observations carry exactly the joint mass per-column
+statistics structurally lack. This is where feedback maintenance earns its keep for the
+optimizer---and, as in the single-column case, the repair operator is the training-free
+max-entropy projection, now in two dimensions.
 
-The second cut varies the feedback budget $K$ directly, in the
-optimizer-decision proxy, where future predicates are spread across the domain so that
-a finite window leaves residual nullspace at every budget.
-
-\begin{figure}[t]
-  \centering
-  \begin{tikzpicture}
-    \begin{axis}[
-        width=.92\columnwidth, height=6.0cm,
-        xmode=log, log basis x={2},
-        xtick={2,4,8,16}, xticklabels={2,4,8,16},
-        xlabel={feedback budget $K$ (most recent observations)},
-        title={\small Geometric-mean selectivity Q-error\quad($\downarrow$ better)},
-        title style={yshift=1pt},
-        ymin=1.3, ymax=2.95,
-        ymajorgrids, grid style={gray!20},
-        tick label style={font=\small}, label style={font=\small},
-        legend style={at={(0.5,-0.24)}, anchor=north, legend columns=2,
-          font=\small, draw=none, column sep=10pt},
-        mark options={solid},
-      ]
-      \addplot[gray!70, densely dashed, thick, mark=none] coordinates {(2,2.867)(4,2.867)(8,2.867)(16,2.867)};
-      \addplot[teal!70!black, thick, mark=triangle*, mark size=2.4pt] coordinates {(2,2.083)(4,1.797)(8,1.678)(16,1.664)};
-      \addplot[orange!85!black, thick, mark=*, mark size=1.8pt] coordinates {(2,2.147)(4,1.924)(8,1.667)(16,1.543)};
-      \addplot[blue!60!black, very thick, mark=square*, mark size=1.8pt] coordinates {(2,1.994)(4,1.675)(8,1.475)(16,1.402)};
-      \legend{stale (no feedback), ISOMER, OASIS-noProj, OASIS}
-    \end{axis}
-  \end{tikzpicture}
-  \caption{Feedback-budget sweep in the optimizer-decision proxy: geometric-mean
-  selectivity Q-error as the feedback window grows (each method sees only the $K$ most
-  recent observations; stale uses none). The learned completion stays lowest at every
-  budget, and its advantage over ISOMER persists---and even grows---as feedback densifies
-  ($+4.3\%$ at $K{=}2$ to $+15.7\%$ at $K{=}16$): more feedback fills the residual
-  nullspace rather than closing the gap, the rank curve the analysis predicts.}
-  \label{fig:feedback_budget}
-\end{figure}
-
-Figure~\ref{fig:feedback_budget} shows the learned completion beats ISOMER at
-\emph{every} budget: $+4.3\%$ at $K{=}2$ ($1.994$ versus $2.083$), $+6.8\%$ at $K{=}4$,
-$+12.1\%$ at $K{=}8$, and $+15.7\%$ at $K{=}16$ ($1.402$ versus $1.664$). On this proxy
-surface ISOMER degrades gracefully as feedback thins, so the relative gap stays modest at
-every budget. On the real PostgreSQL planner the maximum-entropy completion instead fails
-sharply at sparse feedback, and there the gap is largest---a $2.7\times$ aggregate
-row-Q-error difference at $K{=}2$ over twelve configurations, up to $5.2\times$ on a
-representative one (Table~\ref{tab:postgres_sparse_multiconfig}). The two pictures agree on
-the mechanism: the learned completion earns its advantage wherever feedback under-determines
-the marginal, and the methods converge only when dense feedback saturates the constraints
-and pins it. This is also why the gain concentrates spatially in the nullspace
-(Figure~\ref{fig:feedback_locality}) rather than at any particular budget.
-
-\subsubsection{The Gain Is the Objective, and It Is Estimator-Agnostic}
-\label{sec:ablation}\label{sec:stage1-swap}
-
-We now decompose the objective of Eq.~\eqref{eq:composite}, holding data, capacity, and
-projection fixed. Each variant's prior is calibrated by the \emph{same} real
-projection on held-out future predicates and reported as percentage improvement over
-the strongest classical prior (STHoles) at three feedback budgets.
+\paragraph{Validation on the Join Order Benchmark}
+The pairs above use real columns but a controlled predicate suite. We therefore repeat the
+test on the Join Order Benchmark (JOB), the standard real-data cardinality-estimation
+benchmark, querying its IMDB tables inside a live PostgreSQL~14 planner. For correlated
+column pairs we score the geometric-mean Q-error of conjunctive predicates (range on numeric
+columns, equality on categorical ones) under four estimators: PostgreSQL's default
+(per-column statistics plus independence); PostgreSQL's own multi-column \emph{extended}
+statistics (\texttt{CREATE STATISTICS}, built from a full scan); independence with the
+\emph{true} marginals (\textsc{avi}, which isolates the cross-column error from per-column
+error); and the OASIS feedback-repaired joint ($K{=}16$ observed conjunctive masses, no scan).
 
 \begin{table}[t]
   \centering\small
-  \caption{Stage-1 objective ablation (held-out future-predicate Q-error after the
-  same real projection; \% improvement over STHoles, higher is better). All variants
-  share data, capacity, and projection. \emph{Reconstruction-only} is the floor; the
-  composite objective drives the gain; \emph{raw-train + post-hoc projection} matches
-  \emph{full in-loop}, so differentiable projection \emph{in the loop} is not the
-  source of the gain. The dense-feedback ($K{=}16$) column shows the
-  reconstruction/consistency regularizers, not in-loop projection, are what prevent
-  collapse.}
-  \label{tab:mr_ablation}
-  \setlength{\tabcolsep}{6pt}
-  \begin{tabular}{l rrr}
+  \caption{Cross-column repair on the Join Order Benchmark (real IMDB tables, live
+  PostgreSQL~14). Geometric-mean conjunctive-predicate Q-error ($\downarrow$) for
+  PostgreSQL-default (per-column $+$ independence), PostgreSQL extended statistics
+  (\texttt{CREATE STATISTICS}, scan-built), independence with true marginals (\textsc{avi}),
+  and the OASIS feedback-repaired joint (no scan). The conservative cross-column effect is
+  \textsc{avi}$\to$OASIS; \texttt{person\_info} is a near-independent control.}
+  \label{tab:crosscol_job}
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{l r r r r r}
     \toprule
-    Stage-1 objective variant & $K{=}2$ & $K{=}6$ & $K{=}16$ \\
+    Real IMDB column pair & $r$ & PG-def. & PG-ext. & \textsc{avi} & OASIS \\
     \midrule
-    Histogram reconstruction only & $-1.2$ & $-1.9$ & $-7.8$ \\
-    Future-loss only (in-loop proj.)    & $+8.8$ & $+7.0$ & $+0.5$ \\
-    \;\;+ FactorJoin regret             & $+8.0$ & $+5.9$ & $-0.0$ \\
-    \;\;+ feedback residual             & $+9.8$ & $+7.4$ & $+3.4$ \\
-    Raw-train + \emph{post-hoc} projection & $+9.4$ & $+9.0$ & $+7.8$ \\
-    \textbf{Full (in-loop projection)}  & $+8.7$ & $+7.9$ & $+7.8$ \\
+    \texttt{title.prod\_year/kind}        & $0.35$  & $5.69$ & $5.63$ & $5.70$ & $\mathbf{1.95}$ \\
+    \texttt{aka\_title.prod\_year/kind}   & $0.29$  & $3.85$ & $3.93$ & $3.75$ & $\mathbf{1.67}$ \\
+    \texttt{cast\_info.nr\_order/role}    & $0.01$  & $78.2$ & $77.6$ & $2.27$ & $\mathbf{1.63}$ \\
+    \texttt{movie\_comp.ctype/cid}        & $0.51$  & $62.4$ & $62.3$ & $1.25$ & $\mathbf{1.09}$ \\
+    \texttt{title.season/episode}         & $-0.02$ & $37.7$ & $39.4$ & $1.51$ & $\mathbf{1.45}$ \\
+    \texttt{person\_info.itype/pid}~(ctrl)& $0.04$  & $58.9$ & $58.9$ & $1.08$ & $1.09$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Three conclusions follow. First, reconstruction-only training fails at every budget:
-training a prior to look like the
-post-drift histogram makes it worse than the classical priors, so an optimizer-facing
-objective is necessary. Second, the composite objective creates the gain, and the
-reconstruction and consistency regularizers are essential at dense feedback:
-future-loss alone, and future-loss${+}$join, collapse to a tie at $K{=}16$, and only
-the regularizers restore the dense-feedback margin. Third, \emph{training the prior
-through the projection is not the source of the gain}: ``raw-train ${+}$ post-hoc
-projection,'' where the loss never sees the projection, matches ``full in-loop'' to
-within roughly one percentage point at every budget (Table~\ref{tab:mr_ablation}), and the
-equivalence holds across two training seeds on the full drift range. We therefore do not claim in-loop calibration is necessary; it
-is a convenient but inessential training device, and post-hoc projection---simpler to
-deploy---performs identically. The contribution is the composite objective.
-
-The converse question is whether the completion-plus-projection picture is specific to
-the OASIS prior. We run a prior-source swap: the same projection and router are applied
-to stale statistics, two feedback heuristics (LinInterp, FeedAvg), STHoles, QuickSel-H,
-and the OASIS prior, on the same cached drift cases and feedback windows.
-
-\input{../experiments/results/stage1_estimator_swap_v3/table_stage1_estimator_swap.tex}
-
-Table~\ref{tab:stage1_estimator_swap} shows the projection and router improve every
-prior, lowering future-predicate Q-error to a tight band ($1.33$--$1.44$) and the
-feedback residual to $0.035$--$0.038$, and the Router is no worse than hard projection
-for \emph{every} source, including the learned query-driven control LQM (an internal
-matched-interface baseline, not a published learned-CE system; Section~\ref{sec:experiments}; raw
-$1.607$, routed $1.425$). The OASIS prior is the strongest \emph{raw} input ($1.489$,
-below STHoles $1.572$, QuickSel-H $1.614$, and LQM $1.607$), and it routes to the best
-final value ($1.328$, versus $1.425$ for LQM and $1.39$--$1.44$ for the others). The
-learned query-driven baseline therefore lands with the classical self-tuning histograms
-rather than with OASIS: fitting a flexible model to the feedback alone is not enough; the
-advantage comes from training the completion against optimizer error. This restates the
-paper's central claim at the level of one
-experiment: the projection and router empirically make any imperfect prior safe to use on these
-workloads, while the trained completion is what wins the nullspace where the feedback
-leaves it open.
-
-\subsubsection{Robustness Beyond the Training Generator}
-\label{sec:ood-drift-realism}\label{sec:traces}
-
-All results so far stay inside the training generator. Three steps leave it: unseen
-drift families, explicit DML event streams, and a real public trace. The first evaluates
-the prior, trained on the domain-randomized mixture, unchanged on six deployment-inspired
-drift families: batch loads, range shifts, skew evolution, outlier bursts, multimodal
-drift, and seasonal/mixed drift.
-
-\input{../experiments/results/ood_drift_realism_v3/table_ood_drift_realism.tex}
-
-Table~\ref{tab:ood_drift_realism} shows the
-expected graceful degradation. The deployed forms---projected and routed---remain
-among the strongest non-fresh methods, edging ISOMER on
-batch-load ($1.251$ vs $1.461$), skew ($1.171$ vs $1.182$), and outlier drift; and
-where the \emph{raw} prior over-extrapolates on an unseen family---batch-load
-($1.987$) and skew ($1.521$)---the projection and residual-gated Hybrid pull it back to
-ISOMER level using feedback residuals alone. Under distribution shift the learned
-completion no longer dominates, but it never escapes the safety net.
-
-The second step replaces drift operators with
-explicit DML event streams anchored to analytical maintenance patterns---append-heavy
-sales, promotion price revisions, inventory restocking, returns/cancellations, segment
-churn, seasonal maintenance---each emitting insert/update/delete counts before a
-feedback observation.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{figures/fig_trace_grounded_drift.pdf}
-  \caption{Benchmark-inspired DML traces: percentage reduction in geometric-mean
-  selectivity Q-error relative to stale (cell value; positive is better, negative is a
-  regression below stale). The projected OASIS and the Hybrid track ISOMER and the fresh
-  reference, while the raw OASIS-noProj regresses on update-heavy traces (promotion price,
-  seasonal mixed)---the failure the projection and router are there to absorb.}
-  \label{fig:trace_grounded_drift}
-\end{figure}
-
-The third uses a real public trace with a deliberately bounded claim: lacking access
-to private DBMS production logs, we use the NASA Kennedy Space Center HTTP request
-trace~\cite{itaNASAHTTP,arlitt1996web}, treating each request as an append to an event
-table and deriving three single-column signals (log reply bytes, time of day, log path
-length).
-
-\input{../experiments/results/public_trace_workload_v3/table_public_trace_workload.tex}
-
-Table~\ref{tab:public_trace_workload}, with
-Figure~\ref{fig:trace_grounded_drift}, reinforces the safety story. On the DML traces the Hybrid tracks ISOMER and stays the best non-fresh
-choice. On the real NASA trace the boundary is sharper: the raw learned completion
-regresses in aggregate ($1.466$ versus stale $1.241$), and catastrophically on
-time-of-day predicates ($2.66$, worse than stale's $1.77$), because a real append
-stream is not the training drift. The projection and residual-gated Router prevent the
-failure, recovering to ISOMER level ($1.25$ on time-of-day) and to the best deployable
-aggregates (Hybrid $1.114$, Router $1.115$). This is the deployment layer behaving as intended:
-trust the learned completion when the feedback window supports it, and fall back when
-the real trace exposes over-extrapolation.
+Table~\ref{tab:crosscol_job} shows three things. First, where the optimizer's error is
+genuinely the independence assumption---\texttt{production\_year}$\times$\texttt{kind\_id} in
+\texttt{title} and \texttt{aka\_title}, where PostgreSQL's default already matches the
+true-marginal \textsc{avi} baseline---feedback joint repair cuts conjunctive Q-error by
+$56$--$66\%$. Second, on a near-independent control (\texttt{person\_info}, an identifier
+column) it has no effect ($-1\%$), confirming the repair is specific to genuine dependence.
+Third, PostgreSQL's conjunctive estimates on these columns are badly off (up to $78\times$),
+and its own extended statistics do \emph{not} help---their MCV/dependency machinery covers
+common combinations, not the correlated tail---whereas the feedback-repaired joint brings the
+error to $1.1$--$2.0\times$. Where PostgreSQL's error far exceeds the true-marginal baseline
+(e.g.\ \texttt{cast\_info}, $78\times$ versus $2.3\times$), most of that gap is PostgreSQL's
+\emph{per-column} estimation error on skewed columns rather than independence; we therefore
+report the conservative cross-column effect as the \textsc{avi}$\to$OASIS reduction, which is
+feedback repair alone.
 
 \subsection{Downstream Optimizer Consumption}
 \label{sec:optimizer-facing}
 
-Section~\ref{sec:single-column-results} corrected the single-column object in isolation;
-we now feed it to its downstream consumers---composition estimators, a join kernel, and a
-real PostgreSQL planner---and ask where the correction still holds. The boundary from
-Section~\ref{sec:intro} holds: the primary evidence is estimate quality and plan
-\emph{shape}, with one narrow TPC-H runtime check.
+A corrected single-column statistic is only as good as what its consumers can safely do with
+it. This section tests a single claim---\emph{a feedback-consistent (projected) statistic is
+safe for any consumer, whereas an unprojected correction can be useless or actively
+harmful}---and tests it along an escalating axis rather than re-establishing it four times.
+Each rung adds exactly one thing the previous cannot: six composition estimators show the claim
+is \emph{consumer-agnostic} (Section~\ref{sec:composition-family}); a bilinear FactorJoin kernel
+is the \emph{nonlinear stress case}, where an unprojected correction turns harmful
+(Section~\ref{sec:factorjoin}); a live PostgreSQL planner is the \emph{real-system} test on row
+estimates and plan shapes (Section~\ref{sec:postgres-planner}); and TPC-H is the lone
+\emph{runtime} reality check (Section~\ref{sec:tpch-runtime}). Because the OASIS and
+\emph{Unproj.\ prior} columns differ only in the projection, every rung also isolates how much
+of the benefit is the projection rather than the prior. The primary evidence is estimate quality and
+plan \emph{shape}; runtime enters only in the final, deliberately narrow check.
 
 \subsubsection{Composition-Family Generalization}
 \label{sec:composition-family}
@@ -990,53 +799,98 @@ for the Gaussian-correlated data.
 
 \begin{figure}[t]
   \centering
-  \begin{tikzpicture}
-    \pgfplotsset{cmpstyle/.style={
-        ybar=0.5pt, bar width=5pt, width=.97\columnwidth,
-        symbolic x coords={Indep.,IPF,Gaussian,Clayton,Gumbel,Frank}, xtick=data,
-        enlarge x limits=0.10, ymajorgrids, grid style={gray!20},
-        tick label style={font=\small}, label style={font=\small}}}
-    \begin{axis}[cmpstyle, name=cmup, height=2.3cm,
-        ymin=1.55, ymax=2.0, ytick={1.6,1.8,2.0}, axis x line=none,
-        title={\small Joint Q-error\quad($\downarrow$ better; fresh${}\approx{}1.1$--$1.25$)},
-        title style={yshift=2pt},
-      ]
-      \addplot[fill=gray!35,draw=gray!55!black] coordinates {(Indep.,1.924)(IPF,1.668)(Gaussian,1.645)(Clayton,1.836)(Gumbel,1.639)(Frank,1.621)};
-      \addplot[draw=none,fill=none] coordinates {(Indep.,1.191)(IPF,1.302)(Gaussian,1.251)(Clayton,1.310)(Gumbel,1.254)(Frank,1.291)};
-      \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(Indep.,1.913)(IPF,1.837)(Gaussian,1.901)(Clayton,1.949)(Gumbel,1.833)(Frank,1.899)};
-      \addplot[draw=none,fill=none] coordinates {(Indep.,1.231)(IPF,1.319)(Gaussian,1.265)(Clayton,1.300)(Gumbel,1.271)(Frank,1.302)};
-    \end{axis}
-    \begin{axis}[cmpstyle, name=cmlo, at={(cmup.below south west)}, anchor=north west, yshift=-1.5mm,
-        height=3.5cm, ymin=1.15, ymax=1.35, ytick={1.2,1.25,1.3},
-        xtick style={draw=none},
-        legend style={at={(0.5,-0.46)}, anchor=north, legend columns=-1,
-          font=\small, draw=none, column sep=9pt},
-      ]
-      \addplot[fill=gray!35,draw=gray!55!black] coordinates {(Indep.,1.924)(IPF,1.668)(Gaussian,1.645)(Clayton,1.836)(Gumbel,1.639)(Frank,1.621)};
-      \addplot[fill=teal!55,draw=teal!70!black] coordinates {(Indep.,1.191)(IPF,1.302)(Gaussian,1.251)(Clayton,1.310)(Gumbel,1.254)(Frank,1.291)};
-      \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(Indep.,1.913)(IPF,1.837)(Gaussian,1.901)(Clayton,1.949)(Gumbel,1.833)(Frank,1.899)};
-      \addplot[fill=blue!60!black,draw=blue!55!black] coordinates {(Indep.,1.231)(IPF,1.319)(Gaussian,1.265)(Clayton,1.300)(Gumbel,1.271)(Frank,1.302)};
-      \legend{stale, ISOMER, OASIS-noProj (raw), OASIS}
-    \end{axis}
-    \draw[draw=white,line width=2.2pt] (cmup.south west) -- (cmlo.north west);
-    \draw[semithick] ($(cmup.south west)+(-3pt,2pt)$) -- ($(cmup.south west)+(3pt,-2pt)$);
-    \draw[semithick] ($(cmlo.north west)+(-3pt,2pt)$) -- ($(cmlo.north west)+(3pt,-2pt)$);
-  \end{tikzpicture}
-  \caption{OASIS as a drop-in marginal across six composition estimators (two-column range
-  predicates; dependence structure fixed per estimator, only the marginal varies);
-  joint Q-error on a broken axis (upper panel for the large values, lower panel zoomed on
-  the recovered cluster). Both \emph{projected} methods---the classical ISOMER and the
-  learned OASIS---recover most of the stale joint Q-error and are comparable, whereas the
-  same learned prior \emph{without} projection (OASIS-noProj) stays near the stale level.
-  Feedback consistency, not the raw prior, is the prerequisite for safe composition.}
-  \label{fig:composition_family}
+  \begin{subfigure}{\linewidth}
+    \centering
+    \begin{tikzpicture}
+      \pgfplotsset{cmpstyle/.style={
+          ybar=0.5pt, bar width=5pt, width=.97\columnwidth,
+          symbolic x coords={Indep.,IPF,Gaussian,Clayton,Gumbel,Frank}, xtick=data,
+          enlarge x limits=0.10, ymajorgrids, grid style={gray!20},
+          tick label style={font=\small}, label style={font=\small}}}
+      \begin{axis}[cmpstyle, name=cmup, height=2.3cm,
+          ymin=1.55, ymax=2.0, ytick={1.6,1.8,2.0}, axis x line=none,
+          title={\small Joint Q-error\quad($\downarrow$ better; fresh${}\approx{}1.1$--$1.25$)},
+          title style={yshift=2pt},
+        ]
+        \addplot[fill=gray!35,draw=gray!55!black] coordinates {(Indep.,1.924)(IPF,1.668)(Gaussian,1.645)(Clayton,1.836)(Gumbel,1.639)(Frank,1.621)};
+        \addplot[draw=none,fill=none] coordinates {(Indep.,1.191)(IPF,1.302)(Gaussian,1.251)(Clayton,1.310)(Gumbel,1.254)(Frank,1.291)};
+        \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(Indep.,1.913)(IPF,1.837)(Gaussian,1.901)(Clayton,1.949)(Gumbel,1.833)(Frank,1.899)};
+        \addplot[draw=none,fill=none] coordinates {(Indep.,1.231)(IPF,1.319)(Gaussian,1.265)(Clayton,1.300)(Gumbel,1.271)(Frank,1.302)};
+      \end{axis}
+      \begin{axis}[cmpstyle, name=cmlo, at={(cmup.below south west)}, anchor=north west, yshift=-1.5mm,
+          height=3.5cm, ymin=1.15, ymax=1.35, ytick={1.2,1.25,1.3},
+          xtick style={draw=none},
+        ]
+        \addplot[fill=gray!35,draw=gray!55!black] coordinates {(Indep.,1.924)(IPF,1.668)(Gaussian,1.645)(Clayton,1.836)(Gumbel,1.639)(Frank,1.621)};
+        \addplot[fill=teal!55,draw=teal!70!black] coordinates {(Indep.,1.191)(IPF,1.302)(Gaussian,1.251)(Clayton,1.310)(Gumbel,1.254)(Frank,1.291)};
+        \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(Indep.,1.913)(IPF,1.837)(Gaussian,1.901)(Clayton,1.949)(Gumbel,1.833)(Frank,1.899)};
+        \addplot[fill=blue!60!black,draw=blue!55!black] coordinates {(Indep.,1.231)(IPF,1.319)(Gaussian,1.265)(Clayton,1.300)(Gumbel,1.271)(Frank,1.302)};
+      \end{axis}
+      \draw[draw=white,line width=2.2pt] (cmup.south west) -- (cmlo.north west);
+      \draw[semithick] ($(cmup.south west)+(-3pt,2pt)$) -- ($(cmup.south west)+(3pt,-2pt)$);
+      \draw[semithick] ($(cmlo.north west)+(-3pt,2pt)$) -- ($(cmlo.north west)+(3pt,-2pt)$);
+    \end{tikzpicture}
+    \caption{Composition family (six estimators; dependence fixed, only the marginal varies):
+    the projection (ISOMER, and OASIS, which coincides with it) recovers most of the stale
+    joint Q-error, whereas the unprojected prior stays near stale.}
+    \label{fig:composition_family}
+  \end{subfigure}
+
+  \vspace{1mm}
+  \begin{subfigure}{\linewidth}
+    \centering
+    \begin{tikzpicture}
+      \pgfplotsset{fjstyle/.style={
+          ybar=0.8pt, bar width=7pt, width=.93\columnwidth,
+          symbolic x coords={5,10,20,30}, xtick=data, enlarge x limits=0.22,
+          ymajorgrids, grid style={gray!20},
+          tick label style={font=\small}, label style={font=\small}}}
+      \begin{axis}[fjstyle, name=fjup, height=2.4cm,
+          ymin=1.15, ymax=1.76, ytick={1.2,1.4,1.6}, axis x line=none,
+          title={\small FactorJoin join-cardinality Q-error\quad($\downarrow$ better; fresh${}\approx{}1.0$)},
+          title style={yshift=2pt},
+        ]
+        \addplot[fill=gray!35,draw=gray!55!black] coordinates {(5,1.323)(10,1.179)(20,1.179)(30,1.178)};
+        \addplot[draw=none,fill=none] coordinates {(5,1.009)(10,1.013)(20,1.017)(30,1.026)};
+        \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(5,1.484)(10,1.699)(20,1.673)(30,1.638)};
+        \addplot[draw=none,fill=none] coordinates {(5,1.015)(10,1.028)(20,1.030)(30,1.037)};
+      \end{axis}
+      \begin{axis}[fjstyle, name=fjlo, at={(fjup.below south west)}, anchor=north west, yshift=-1.5mm,
+          height=3.4cm, ymin=1.0, ymax=1.045, ytick={1.00,1.01,1.02,1.03,1.04},
+          xtick style={draw=none}, xlabel={drift intensity $q$}, xlabel style={yshift=1pt},
+          legend style={at={(0.5,-0.62)}, anchor=north, legend columns=-1,
+            font=\small, draw=none, column sep=8pt},
+        ]
+        \addplot[fill=gray!35,draw=gray!55!black] coordinates {(5,1.323)(10,1.179)(20,1.179)(30,1.178)};
+        \addplot[fill=teal!55,draw=teal!70!black] coordinates {(5,1.009)(10,1.013)(20,1.017)(30,1.026)};
+        \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(5,1.484)(10,1.699)(20,1.673)(30,1.638)};
+        \addplot[fill=blue!60!black,draw=blue!55!black] coordinates {(5,1.015)(10,1.028)(20,1.030)(30,1.037)};
+        \legend{stale, ISOMER, Unproj. prior, OASIS}
+      \end{axis}
+      \draw[draw=white,line width=2.2pt] (fjup.south west) -- (fjlo.north west);
+      \draw[semithick] ($(fjup.south west)+(-3pt,2pt)$) -- ($(fjup.south west)+(3pt,-2pt)$);
+      \draw[semithick] ($(fjlo.north west)+(-3pt,2pt)$) -- ($(fjlo.north west)+(3pt,-2pt)$);
+    \end{tikzpicture}
+    \caption{FactorJoin bin-based join kernel as the join-key distribution drifts (only the
+    single-column key histogram varies). The unprojected prior is \emph{actively harmful}---its
+    Q-error exceeds even stale, because the bilinear kernel amplifies mass-concentration
+    errors---whereas the projected methods track the fresh marginal ($\approx 1.0$).}
+    \label{fig:factorjoin}
+  \end{subfigure}
+  \caption{Downstream consumption of the maintained statistic. A feedback-consistent
+  (\emph{projected}) statistic is safe for any consumer, whereas an \emph{unprojected} prior is
+  not---weak or negative in the composition family (a), and actively harmful in the bilinear
+  FactorJoin kernel (b). Each panel uses a broken axis (upper for the large values, lower
+  zoomed on the recovered cluster): the feedback projection, not the prior, is what keeps the
+  maintained statistic safe to consume.}
+  \label{fig:downstream}
 \end{figure}
 
-Figure~\ref{fig:composition_family} shows the same pattern across the family. OASIS-noProj
-yields weak or negative gains, whereas both projected methods recover most of the error---
-OASIS by $19.7\%$--$36.0\%$ over stale, comparably to ISOMER. The benefit does not depend
-on one dependence model and survives the mis-specified copulas: feedback consistency, not
-the raw prior, is the prerequisite for safe composition.
+Figure~\ref{fig:composition_family} shows the claim holds across all six estimators: the
+feedback projection recovers $19.7\%$--$36.0\%$ of the stale joint Q-error, while an unprojected
+correction yields weak or negative gains. The benefit is therefore \emph{consumer-agnostic}---it
+does not depend on a single dependence model and survives even the intentionally mis-specified
+Archimedean copulas.
 
 \subsubsection{FactorJoin Integration}
 \label{sec:factorjoin}
@@ -1049,58 +903,15 @@ where each per-bin key frequency comes from a single-column key histogram, which
 the OASIS-correctable object. The keys are generated independently, so only the
 single-column key histogram varies across methods.
 
-\begin{figure}[t]
-  \centering
-  \begin{tikzpicture}
-    \pgfplotsset{fjstyle/.style={
-        ybar=0.8pt, bar width=7pt, width=.93\columnwidth,
-        symbolic x coords={5,10,20,30}, xtick=data, enlarge x limits=0.22,
-        ymajorgrids, grid style={gray!20},
-        tick label style={font=\small}, label style={font=\small}}}
-    \begin{axis}[fjstyle, name=fjup, height=2.4cm,
-        ymin=1.15, ymax=1.76, ytick={1.2,1.4,1.6}, axis x line=none,
-        title={\small FactorJoin join-cardinality Q-error\quad($\downarrow$ better; fresh${}\approx{}1.0$)},
-        title style={yshift=2pt},
-      ]
-      \addplot[fill=gray!35,draw=gray!55!black] coordinates {(5,1.323)(10,1.179)(20,1.179)(30,1.178)};
-      \addplot[draw=none,fill=none] coordinates {(5,1.009)(10,1.013)(20,1.017)(30,1.026)};
-      \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(5,1.484)(10,1.699)(20,1.673)(30,1.638)};
-      \addplot[draw=none,fill=none] coordinates {(5,1.015)(10,1.028)(20,1.030)(30,1.037)};
-    \end{axis}
-    \begin{axis}[fjstyle, name=fjlo, at={(fjup.below south west)}, anchor=north west, yshift=-1.5mm,
-        height=3.4cm, ymin=1.0, ymax=1.045, ytick={1.00,1.01,1.02,1.03,1.04},
-        xtick style={draw=none}, xlabel={drift intensity $q$}, xlabel style={yshift=1pt},
-        legend style={at={(0.5,-0.62)}, anchor=north, legend columns=-1,
-          font=\small, draw=none, column sep=8pt},
-      ]
-      \addplot[fill=gray!35,draw=gray!55!black] coordinates {(5,1.323)(10,1.179)(20,1.179)(30,1.178)};
-      \addplot[fill=teal!55,draw=teal!70!black] coordinates {(5,1.009)(10,1.013)(20,1.017)(30,1.026)};
-      \addplot[fill=orange!75!black,draw=orange!85!black] coordinates {(5,1.484)(10,1.699)(20,1.673)(30,1.638)};
-      \addplot[fill=blue!60!black,draw=blue!55!black] coordinates {(5,1.015)(10,1.028)(20,1.030)(30,1.037)};
-      \legend{stale, ISOMER, OASIS-noProj (raw), OASIS}
-    \end{axis}
-    \draw[draw=white,line width=2.2pt] (fjup.south west) -- (fjlo.north west);
-    \draw[semithick] ($(fjup.south west)+(-3pt,2pt)$) -- ($(fjup.south west)+(3pt,-2pt)$);
-    \draw[semithick] ($(fjlo.north west)+(-3pt,2pt)$) -- ($(fjlo.north west)+(3pt,-2pt)$);
-  \end{tikzpicture}
-  \caption{OASIS embedded in the FactorJoin bin-based join kernel as the join-key
-  distribution drifts (only the single-column key histogram varies across methods);
-  join-cardinality Q-error on a broken axis (upper panel for the large values, lower panel
-  zoomed on the near-fresh cluster). The raw prior (OASIS-noProj) is \emph{actively
-  harmful}---its Q-error exceeds even the stale baseline, because the bilinear kernel
-  amplifies mass-concentration errors---whereas both projected methods, the classical
-  ISOMER and the learned OASIS, stay near the fresh marginal ($\approx 1.0$) at every drift
-  level. The more nonlinear the consumer, the more essential the completion operator.}
-  \label{fig:factorjoin}
-\end{figure}
+% FactorJoin result is now panel (b) of the two-panel Figure~\ref{fig:downstream} above.
 
-Figure~\ref{fig:factorjoin} shows the strongest calibration failure mode. The raw
-completion is \emph{actively harmful}, raising aggregate join Q-error to $1.621$ versus
-stale $1.213$, because the kernel is bilinear in per-bin mass and amplifies
-mass-concentration errors. Feedback projection fixes it: OASIS improves over stale at
-every drift level ($+12.0\%$--$+23.2\%$, $+15.3\%$ aggregate), the Hybrid by $+16.1\%$,
-and both closely track the fresh marginal. The more nonlinear the consumer, the more
-essential the completion operator becomes.
+Figure~\ref{fig:factorjoin} is the sharp case the escalation was built for. Because the kernel
+is bilinear in per-bin mass, it amplifies mass-concentration errors, and the unprojected
+correction becomes \emph{actively harmful}---aggregate join Q-error $1.621$, worse than the
+stale $1.213$ it was meant to repair. Feedback projection reverses this: OASIS improves over
+stale at every drift level ($+12.0\%$--$+23.2\%$, $+15.3\%$ aggregate; the Hybrid $+16.1\%$) and
+tracks the fresh marginal throughout. A correction that helped the mild consumers above can
+\emph{hurt} a nonlinear one unless it is first projected onto the feedback.
 
 \subsubsection{PostgreSQL Planner-Only Statistics Injection}
 \label{sec:postgres-planner}
@@ -1124,48 +935,23 @@ aggregate row Q-error $27.768$ and match the fresh plan on $56\%$ of queries.
 Table~\ref{tab:postgres_planner_stats_injection_batch} instead reports
 the per-configuration mean$\pm$sd, which differs slightly---e.g.\ stale row Q-error is
 $28.453$ averaged over configurations versus $27.768$ pooled.)
-OASIS-noProj reduces row Q-error to $3.703$ but introduces new plan deviations in
-$2.3\%$ of cases. OASIS reduces row Q-error to $2.362$, matches the fresh plan on
+An unprojected correction reduces row Q-error to $3.703$ but introduces new plan deviations
+in $2.3\%$ of cases. The feedback projection (OASIS) reduces row Q-error to $2.362$, matches the fresh plan on
 $95.9\%$ of queries, recovers $92.1\%$ of stale/fresh disagreements, and cuts new
-deviations to $1.1\%$. Crucially, OASIS ($2.362$) and ISOMER
-($2.374$) are near-identical here---and this is the rank mechanism, not a
-disappointment: these planner-facing windows are dense enough to pin the active
-constraints (Section~\ref{sec:mechanism}), so hard projection converges to nearly the
-same marginal whichever prior seeds it, and the Router selects ISOMER on all twelve
-configurations. The planner is the regime where the \emph{completion operator}, not the
-prior, does the work; the learned prior's advantage instead appears where the feedback
-leaves a nullspace, which on this same planner is the \emph{sparse}-feedback regime we
-turn to next.
+deviations to $1.1\%$. Crucially, OASIS ($2.362$) and ISOMER ($2.374$) are near-identical here---the rank mechanism,
+not a disappointment: these planner-facing windows are dense enough to pin the active
+constraints (Section~\ref{sec:mechanism}), so hard projection converges to nearly the same
+marginal whichever prior seeds it, and the Router selects ISOMER on all twelve configurations.
+On a real optimizer, then, feedback maintenance restores near-fresh plans with no table scan,
+and the projection alone suffices.
 
-\paragraph{Sparse feedback on the real planner}
-The 12-configuration batch above uses the standard dense window ($K{=}16$). To expose the
-nullspace effect, we re-run the \emph{same} 12-configuration grid (left/right drift
-$\times$ 100K/200K rows $\times$ 3 seeds, 84 queries each) while varying the feedback
-budget $K$ (Table~\ref{tab:postgres_sparse_multiconfig}). At $K{=}2$ the maximum-entropy
-projection degrades sharply---aggregate row Q-error $7.53$, a fresh-plan match of only
-$70.0\%$, and new plan deviations on $3.7\%$ of queries---while the learned completion
-holds at $2.83$ (Router $2.82$), a $92.7\%$ fresh-plan match, and $1.1\%$ new deviations:
-a $2.7\times$ aggregate row-Q-error gap on a real optimizer, not a proxy. As feedback
-densifies the constraints pin the marginal and the gap closes: by $K{=}8$ the methods are
-within $2\%$ (ISOMER $2.45$, OASIS $2.40$), and at $K{=}16$ they tie ($2.36$ vs $2.36$),
-reproducing the dense batch above. The effect is sharper still on individual
-configurations: on a representative left-shift, 40K-row config the gap reaches $5.2\times$
-at $K{=}2$ (ISOMER $10.12$ versus OASIS $1.96$, Router $1.95$, with \emph{zero} new
-deviations). This is the deployment knife-edge the paper's central claim predicts: on the
-planner, the learned imputation matters most when feedback is too sparse to pin the
-statistics, and it does not materially regress when feedback is dense.
-
-\begingroup
-\oasisUseMaxWidthResize{.92\columnwidth}
-\input{../experiments/results/exp2_sparse_multiconfig_v3_20260602/table_postgres_sparse_multiconfig.tex}
-\endgroup
 
 \subsubsection{TPC-H DML-Drift Runtime Sanity Check}
 \label{sec:tpch-runtime}
 
-Finally, a deliberately narrow runtime check, with its claim stated up front:
-calibrated statistics \emph{reproduce fresh-statistics behavior}---accuracy, plan
-shape, and runtime---rather than beat the stale baseline on wall-clock. We load TPC-H
+This runtime check states its claim up front: calibrated statistics \emph{reproduce
+fresh-statistics behavior}---accuracy, plan shape, and runtime---rather than beat the stale
+baseline on wall-clock. We load TPC-H
 SF10, drift it with an RF1-style insert stream that shifts \texttt{lineitem.l\_shipdate}
 and \texttt{orders.o\_orderdate} into a new date band, and inject single-column
 statistics for those columns exactly as above, reusing the \emph{same} pretrained prior
@@ -1206,39 +992,14 @@ worst instance---but fresh statistics show a comparable gap there, so this is th
 switching to the correct plan, not a regression introduced by calibration. No calibrated method is slower than fresh by more than
 $1.4\times$ on any query or seed.
 
-\subsubsection{The Optimizer-Decision Proxy and Feedback Robustness}
-\label{sec:proxy}
-
-The proxy of Section~\ref{sec:experiments} summarizes the regime structure on
-plan choices. Table~\ref{tab:optimizer_decision_proxy} reports selectivity Q-error and
-join regret for each statistics state.
-
-\input{../experiments/results/optimizer_decision_proxy_v3/table_optimizer_decision_proxy.tex}
-
-The ordering matches the rest of the paper: stale ($2.867$ Q-error, $1.187$ regret)
-$\to$ ISOMER ($1.664$, $1.063$) $\to$ the learned completion under projection ($1.401$,
-$1.029$) $\to$ the Router ($1.375$, $1.029$, $92.9\%$ join-optimal), approaching fresh
-($1.000$). The Router improves on hard projection while never selecting a higher-residual
-candidate. Robustness along the remaining axes is consistent with the mechanism: the
-feedback-budget sweep (Figure~\ref{fig:feedback_budget}) is the rank curve,
-the per-intensity $q$ columns span drift severity, leave-one-family-out validation
-probes drift family (the prior trained on five families and tested on a held-out sixth
-beats the classical priors and ties ISOMER), and under $10\%$ multiplicative feedback
-noise the Router degrades gracefully---selectivity Q-error rises only from $1.375$ to
-$1.418$ and join-optimal choices from $92.9\%$ to $92.2\%$, still far below ISOMER
-($1.758$) and stale ($2.867$). The failure modes are reported, not hidden: the raw
-prior is harmful in FactorJoin and on the NASA trace, which is why the projection
-and residual gating are part of the method.
-
 \subsection{Overhead and Deployment}
 \label{sec:overhead}
 
-Per-correction OASIS inference averages $1.06$\,ms (tensorization plus one forward
-pass); the PostgreSQL-style format conversion adds $0.066$--$0.073$\,ms, for a combined
-$\approx 1.13$\,ms per column. Feedback collection adds bounded per-conjunct bookkeeping,
-emitting one observation tuple per conjunct at query completion. A correction therefore
-costs one forward pass plus the projection and avoids the
-full-table \texttt{ANALYZE} scan a refresh would incur---the intended use case is
+A per-column correction is the feedback projection (a handful of I-projection sweeps over the
+$B$ buckets) plus the PostgreSQL-style format conversion ($0.066$--$0.073$\,ms); it completes
+in well under a millisecond and uses no learned model. Feedback collection adds bounded
+per-conjunct bookkeeping, emitting one observation tuple per conjunct at query completion. A
+correction therefore avoids the full-table \texttt{ANALYZE} scan a refresh would incur---the intended use case is
 maintaining optimizer-facing statistics \emph{between} scheduled refreshes, not
 replacing full refreshes after major schema changes or bulk shifts.
 
@@ -1255,14 +1016,18 @@ estimates~\cite{chen1994adaptive}. Self-tuning histograms, STHoles, SASH, and IS
 refine statistics from observed results
 \cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}, and
 execution-feedback frameworks repair optimizer state over
-time~\cite{chaudhuri2008paygo}. OASIS shares this statistics-facing target but takes a
-different position: ISOMER's maximum-entropy projection is a
-\emph{completion} of the feedback-underdetermined marginal, and we replace the
-optimizer-agnostic completion with one trained against downstream optimizer error, bounded by a
-rank analysis of when any completion can help. Feedback consistency and maximum-entropy
-estimation are long established; our contribution is, to our knowledge, the first
-treatment of feedback-driven statistics repair as an underdetermined inverse problem with
-an explicit nullspace characterization.
+time~\cite{chaudhuri2008paygo}. OASIS shares this statistics-facing target but treats feedback
+repair as an \emph{identifiability} problem---a rank condition for when feedback pins the
+optimizer-relevant statistic (Proposition~\ref{prop:pinned})---and use it to separate two
+regimes the prior literature does not distinguish: single-column repair, where the
+maximum-entropy projection is near-optimal and learning is unnecessary, and cross-column
+repair, where feedback corrects the independence assumption the per-column statistics
+structurally cannot. The attribute-value-independence assumption and its cost are long
+documented~\cite{poosala1997selectivity,leis2015good}; engines mitigate it with
+multi-dimensional or extended statistics built from scans, and STHoles~\cite{bruno2001stholes}
+builds multidimensional histograms from feedback. OASIS differs in maintaining both the
+marginal and, for correlated columns, the joint from query feedback alone---no rescan, with a
+safety router---and in characterizing when feedback suffices.
 
 \paragraph{Learned cardinality estimation}
 Learned estimators such as NeuroCard, Naru, DeepDB, FACE, MSCN, FLAT, and Iris predict
@@ -1271,12 +1036,12 @@ cardinalities from learned density or representation models
 and benchmark and deployment studies document both their promise and the difficulty of
 robustness across workloads and drift
 \cite{wang2021ready,sun2021designspace,kim2022learnedstudy,han2021cardinality,li2022warper,negi2023robust,li2023alece,wang2023ceda,wang2023ldss,han2024bytecard}.
-This line remains active in this journal: recent work learns dynamic sample selectors for
+This line remains active in the database-systems literature: recent work learns dynamic sample selectors for
 cardinality estimation~\cite{wang2023dynamicsample} and recursive-network models of complex
 predicates~\cite{wang2024recursivepred}. These systems output point estimates or estimator
-state; OASIS instead outputs corrected marginal \emph{statistics} that an existing CBO
-consumes unchanged, and it trains the prior on the optimizer's error rather than on
-cardinality reconstruction, the same distinction the ablation draws internally.
+state; OASIS instead repairs the optimizer's own marginal \emph{statistics} from query feedback
+for an existing CBO to consume unchanged, rather than replacing the estimator with a learned
+model.
 
 \paragraph{Composition, joins, and plan-level learning}
 Copula and factorized-join estimators such as FactorJoin~\cite{wu2023factorjoin} combine
@@ -1292,30 +1057,33 @@ statistics object itself, and the two are complementary.
 \section{Limitations}
 \label{sec:limitations}
 
-The most important boundary is external validity: OASIS is not validated end-to-end on a
-real DBMS query workload with its own statistics-refresh history. This boundary is partly
-structural. To our knowledge no public dataset of production statistics-refresh histories
+The most important boundary is external validity. The cross-column repair is validated on
+the standard Join Order Benchmark against a live PostgreSQL planner
+(Section~\ref{sec:crosscol}), but on a sampled conjunctive-predicate suite rather than an
+end-to-end production query workload with its own statistics-refresh history; the latter
+remains untested. This boundary is partly structural. To our knowledge no public dataset of production statistics-refresh histories
 exists, and the self-tuning-histogram line we build on and compare against---STHoles,
 ISOMER, and QuickSel-H---was likewise established on synthetic or controlled drift rather
 than on such histories. We therefore adopt the evaluation regime of the prior art and
-climb a deliberate ladder of increasing realism on top of it: controlled drift families;
-benchmark-inspired insert/update/delete DML traces; injection into a \emph{real}
+climb a deliberate ladder of increasing realism on top of it: controlled drift families over
+real data columns; injection into a \emph{real}
 PostgreSQL optimizer through \texttt{pg\_statistic}, scored on \texttt{EXPLAIN} estimates
-and plan shapes; a cross-schema TPC-H check that reuses the \emph{same} pretrained prior
-with no retraining; and one real public production trace (NASA HTTP), which we treat
-precisely as an append-only event table rather than a database query log. Each rung is a
-genuine step beyond the baselines' original validation, but none is a production refresh
-history, and validating the same policy end-to-end on one remains the primary future
-direction.
+and plan shapes; and a cross-schema TPC-H check---driven by benchmark-style
+insert/update/delete refresh streams---that reuses the \emph{same} pretrained prior
+with no retraining. Each rung is a
+genuine step beyond the baselines' original validation, though none is yet a production refresh
+history.
 
-The mechanism is also intrinsically bounded: once feedback pins the marginal
-the learned completion provably cannot beat the projection and ties ISOMER under the same
-finite representation and projection operator, so the gains
-are concentrated where feedback leaves a nullspace---away from densely constrained
-regions---and we claim them only there. OASIS does
-not infer multi-column dependence from single-column feedback; where joint-cardinality
-error is dominated by cross-column correlation an external dependence model remains
-necessary. The TPC-H check shows only that calibrated statistics reproduce
+The mechanism is also intrinsically bounded: once feedback pins the statistic, every
+projection-based method coincides (Proposition~\ref{prop:pinned}), so any repair can act only
+on the part feedback leaves free. For a single column that free part carries no
+learnable structure beyond the maximum-entropy default
+(Section~\ref{sec:single-column-results}), which is why we do not deploy a learned
+single-column prior. The exploitable opportunity is the cross-column joint, and even there
+OASIS repairs only the pairwise correlation that conjunctive feedback observes, not
+higher-order dependence or join-key skew, for which an external model remains necessary; the
+cross-column study is also an estimate-quality result, not yet an end-to-end planner
+injection. The TPC-H check shows only that calibrated statistics reproduce
 fresh-statistics execution time on one schema and six queries; runtime in general depends
 on executor behavior, caching, physical design, and cost-model calibration, and a stale
 mis-estimate can yield a coincidentally faster plan.
@@ -1330,40 +1098,33 @@ regression if one arose. A plan-shape-aware gate is left to future work.
 \section{Conclusion}
 \label{sec:conclusion}
 
-OASIS repairs stale single-column optimizer statistics from query feedback without
-rescanning tables or modifying the optimizer. Its organizing idea is that feedback
-repair is an underdetermined inverse problem: feedback pins the marginal only on the span
-of the observed predicates and leaves a nullspace that some completion must fill. The
-classical methods fill it with maximum entropy; OASIS fills it with a completion trained
-on a composite optimizer-facing objective (future-predicate error, join regret,
-feedback consistency, and a reconstruction regularizer), and a rank analysis describes
-where this can help. On held-out single-column drift the learned completion cuts
-future-predicate Q-error by $12.8\%$ over ISOMER and beats STHoles and QuickSel-H, with
-the gain rising to $21\%$ on predicates farthest from feedback, present from the sparsest
-feedback ($+4.3\%$ at $K{=}2$) and persisting across budgets, while, under the same
-finite representation and projection operator, it provably ties ISOMER only where dense
-feedback saturates the constraints and pins the marginal.
-An ablation isolates the gain to the objective and shows in-loop projection is
-inessential.
+OASIS maintains cost-based optimizer statistics from query feedback, with no table rescan
+and no change to the optimizer. Its organizing finding is a dichotomy. For a single column,
+feedback nearly determines the marginal: we give an identifiability condition
+(Proposition~\ref{prop:pinned}) for when feedback pins it, and show on held-out \emph{real}
+datasets that the maximum-entropy projection (the classical ISOMER step) is already
+near-optimal---a learned prior and the self-tuning histograms STHoles and QuickSel-H give no
+edge over it. Single-column repair is thus easy and needs no machine learning. The
+optimizer's larger residual error is the independence assumption on correlated columns, and
+there feedback helps decisively: a feedback-driven joint repair cuts conjunctive-predicate
+Q-error by up to $31\%$ ($13.6\%$ in aggregate) over independence on real correlated columns,
+the gain concentrated where the columns are correlated.
 
-The same feedback projection and a residual-gated router make the imperfect
-completion safe to consume: OASIS improves a six-estimator composition family by
-$20\%$--$36\%$, rescues a FactorJoin kernel where the raw prior is harmful, cuts
-PostgreSQL new plan deviations to $1.1\%$, and on a TPC-H sanity check tracks
-fresh-statistics behavior---accuracy and plan shape, with runtime within the reported
-distribution---without the table scan. OASIS is best understood as a reusable,
-feedback-calibrated statistics layer that learns the optimizer-relevant completion of the
-feedback nullspace and falls back to the maximum-entropy default where the nullspace
-closes.
+Packaged as a statistics-layer middleware and injected into a real PostgreSQL planner,
+feedback-maintained single-column statistics cut row Q-error from $27.8$ to $2.4$ and lift
+fresh-plan match from $56\%$ to $96\%$ without a table scan, and the maintained marginals
+stay safe for composition and join estimators to consume, guarded by a residual-gated router
+that never degrades below the maximum-entropy default. OASIS targets the two structural errors in an optimizer's statistics---staleness and
+independence---using the feedback ordinary queries already produce, with no rescan.
 
 \section*{Declarations}
 
 \paragraph{Data availability}
 The drift generators, evaluation harness, and the scripts that reproduce every table and
 figure in this paper (including the random seeds) are publicly available at
-\url{https://github.com/M1zukiqwq/OASIS-OpenSource}; the NASA Kennedy Space Center HTTP trace used in
-Section~\ref{sec:traces} is publicly available from its original
-source~\cite{itaNASAHTTP}.
+\url{https://github.com/M1zukiqwq/OASIS-OpenSource}; the real datasets used in the evaluation
+(Adult/Census, Covertype/Forest, Power, Wine Quality, Bike Sharing) are publicly available
+from the UCI Machine Learning Repository.
 
 \paragraph{Funding}
 This research did not receive any specific grant from funding agencies in the public,

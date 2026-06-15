@@ -14,7 +14,7 @@ Submission portal: Editorial Manager via the journal's "Submit your article" lin
 | 2 | Manuscript PDF (the system also builds one for review) | ✅ ready | `paper/main_is.pdf` (37 pp.) |
 | 3 | Highlights | ✅ drafted | `submission/HIGHLIGHTS.txt` (5 bullets, ≤85 chars) |
 | 4 | Cover letter | ✅ drafted | `submission/cover_letter.md` → paste/PDF |
-| 5 | Supplementary material | ⚠️ check | `paper/supplementary.tex`/`.pdf` (uses LLNCS — see note) |
+| 5 | Supplementary material | — none | dropped 2026-06-15 (stale narrative); main paper is self-contained |
 | 6 | Declaration of Interest form | ⬜ in portal | "none" (also stated in manuscript) |
 | 7 | Graphical abstract | ⬜ optional | could reuse the architecture figure (Fig. 2) |
 
@@ -71,10 +71,10 @@ the final (non-anonymous) submission, or kept redacted if the journal review is 
 
 ## D. Notes / decisions for you
 
-- **Supplement** — ✅ resolved: `supplementary.tex` converted from Springer `llncs` to a
-  neutral `article` class (compiles clean, 17 pp., `supplementary.pdf`); real authors
-  added. Submit `supplementary.pdf` as the supplementary file. `mr_supplement.tex` is an
-  orphan (referenced by nothing, superseded) — safe to delete.
+- **Supplement** — ❌ dropped (2026-06-15): it was on the old/refuted "Feedback Nullspace"
+  narrative and contradicted the rewritten main paper. The main paper is now self-contained
+  (no supplement). Stale files moved to `paper/dropped_stale_supplement/`. Do **not** upload
+  a supplementary file.
 - **Public artifact repo** — ✅ staged at `../../oasis-artifact/` (git-initialized, code +
   trained checkpoint + result tables + README/LICENSE/requirements; large rows and the
   NASA `.gz` excluded). Push it to a new GitHub repo, then paste its URL into the

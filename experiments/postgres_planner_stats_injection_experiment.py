@@ -12,7 +12,7 @@ signals when injected as single-column statistics:
 
 The script creates a local synthetic table whose current data follows the
 "fresh" distribution, then injects alternative pg_statistic rows for fact.x:
-stale, ISOMER, OASIS-noProj, OASIS, Soft, Hybrid, Aggressive, Router, and fresh. PostgreSQL therefore uses
+stale, ISOMER, Unproj. prior, OASIS, Soft, Hybrid, Aggressive, Router, and fresh. PostgreSQL therefore uses
 its real planner and cost model, while the experiment remains narrowly about
 planner evidence rather than execution latency.
 """
@@ -785,7 +785,7 @@ def method_label(method: str) -> str:
     return {
         "stale": "Stale",
         "isomer": "ISOMER",
-        "oasis": "OASIS-noProj",
+        "oasis": "Unproj. prior",
         "oasis_projected": "OASIS",
         "oasis_soft_projection": "Soft",
         "hybrid": "Hybrid",

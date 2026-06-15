@@ -1,0 +1,20 @@
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Stage-1 prior-source swap under a fixed Stage-2 calibration protocol. Each row supplies a different single-column marginal prior to Stage 2; lower Q-error and feedback residual are better.}
+  \label{tab:stage1_estimator_swap}
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    Stage-1 source & Raw QE & +Hard QE & +Router QE & Router gain & Raw resid. & Router resid. \\
+    \midrule
+    Stale prior & 1.084 & 1.056 & 1.056 & 2.6\% & 0.0087 & 0.0029 \\
+    LinInterp & 1.103 & 1.071 & 1.056 & 4.3\% & 0.0105 & 0.0028 \\
+    FeedAvg & 1.152 & 1.095 & 1.062 & 7.8\% & 0.0110 & 0.0028 \\
+    STHoles & 1.146 & 1.082 & 1.055 & 7.9\% & 0.0186 & 0.0028 \\
+    QuickSel-H & 1.447 & 1.246 & 1.067 & 26.3\% & 0.0171 & 0.0029 \\
+    LQM (learned QD) & 1.204 & 1.156 & 1.073 & 10.9\% & 0.0103 & 0.0027 \\
+    OASIS MLP & 1.317 & 1.148 & 1.061 & 19.5\% & 0.0367 & 0.0029 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

@@ -1,0 +1,27 @@
+\begin{table}[t]
+  \centering\small
+  \caption{Single-column repair on held-out \emph{real} datasets (Power, Forest,
+  Census), reusing the prior trained only on a disjoint pool of real columns. Stale is
+  the uncorrected histogram; ISOMER is the maximum-entropy feedback projection; STHoles
+  and QuickSel-H are self-tuning histograms; the learned prior is reported routed. All
+  feedback methods cluster tightly and the learned prior gives \emph{no} gain over the
+  max-entropy projection: on real single-column data, feedback projection is already
+  near-optimal. Geometric-mean future-predicate Q-error ($\downarrow$).}
+  \label{tab:real_singlecol}
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{l c r r r r r}
+    \toprule
+    Dataset & $K$ & Stale & ISOMER & STHoles & QuickSel-H & Learned \\
+    \midrule
+    Power & 16 & 1.511 & 1.182 & 1.171 & 1.245 & 1.164 \\
+     & 2 & 1.528 & 1.362 & 1.356 & 1.408 & 1.346 \\
+    \addlinespace[2pt]
+    Forest & 16 & 1.766 & 1.125 & 1.113 & 1.104 & 1.104 \\
+     & 2 & 1.813 & 1.472 & 1.464 & 1.470 & 1.451 \\
+    \addlinespace[2pt]
+    Census & 16 & 1.038 & 1.020 & 1.030 & 1.030 & 1.020 \\
+     & 2 & 1.040 & 1.039 & 1.050 & 1.066 & 1.041 \\
+    \addlinespace[2pt]
+    \bottomrule
+  \end{tabular}
+\end{table}

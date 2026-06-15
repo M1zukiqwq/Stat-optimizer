@@ -27,7 +27,7 @@ OUT = _REPO / "experiments" / "results" / "postgres_runtime_tpch_seed1_20260601"
 LABEL = {
     "stale": "Stale",
     "isomer": "ISOMER",
-    "oasis": "OASIS-noProj",
+    "oasis": "Unproj. prior",
     "oasis_projected": "OASIS",
     "calibrated_hybrid": "Router",
     "fresh": "Fresh",

@@ -1,0 +1,36 @@
+Stage-1 estimator swap: is Stage-2 calibration estimator-agnostic?
+====================================================================
+Cached full-grid cases: 512 (q=1,3,5,10, max_cases_per_q=128, predicates_per_case=32)
+
+Future selectivity Q-error (lower is better) per Stage-1 estimator:
+
+Stage-1 estimator      raw    +hard  +router  router gain
+--------------------------------------------------------
+Stale prior         1.040    1.039    1.038        0.1%
+LinInterp           1.083    1.055    1.039        4.0%
+FeedAvg             1.056    1.045    1.039        1.5%
+STHoles             1.078    1.050    1.039        3.6%
+QuickSel-H          1.077    1.066    1.042        3.3%
+LQM (learned QD)    1.040    1.039    1.038        0.2%
+OASIS MLP           1.055    1.049    1.041        1.3%
+
+Feedback residual (lower is better): raw / +hard / +router
+  Stale prior     0.0048 / 0.0010 / 0.0010
+  LinInterp       0.0178 / 0.0026 / 0.0009
+  FeedAvg         0.0087 / 0.0016 / 0.0009
+  STHoles         0.0188 / 0.0027 / 0.0008
+  QuickSel-H      0.0089 / 0.0019 / 0.0009
+  LQM (learned QD)0.0045 / 0.0010 / 0.0009
+  OASIS MLP       0.0062 / 0.0013 / 0.0008
+
+Router reduces future Q-error vs the raw Stage-1 marginal for every estimator: True
+Router is <= hard projection for every estimator: True
+
+Router choice mix (aggregate):
+  Stale prior     stale 31.1%, isomer 56.4%, soft 12.5%
+  LinInterp       stale 31.8%, isomer 38.7%, hard 23.2%, soft 6.2%
+  FeedAvg         stale 32.2%, isomer 45.9%, hard 14.1%, soft 7.8%
+  STHoles         stale 32.8%, isomer 49.8%, hard 15.4%, soft 2.0%
+  QuickSel-H      stale 31.4%, isomer 53.3%, hard 5.7%, soft 9.6%
+  LQM (learned QD)stale 31.4%, isomer 44.9%, hard 13.5%, soft 10.2%
+  OASIS MLP       stale 32.8%, isomer 33.8%, hard 25.8%, soft 7.6%

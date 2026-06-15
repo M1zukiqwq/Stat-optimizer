@@ -14,21 +14,10 @@ PSQL: list[str] = []
 STATEMENT_TIMEOUT = "20min"
 
 
-def inject_hint(sql: str, hint: str | None) -> str:
-    if not hint:
-        return sql
-    return re.sub(r"^\s*SELECT\b", "SELECT /*+ " + hint + " */", sql, count=1, flags=re.I)
-
-
-def run_explain(sql: str, analyze: bool) -> dict:
+def run_explain(sql: str, analyze: bool, hint: str | None = None) -> dict:
     opts = "ANALYZE, FORMAT JSON" if analyze else "FORMAT JSON"
-    wrapped = (
-        "LOAD 'pg_hint_plan'; "
-        "SET pg_hint_plan.enable_hint = on; "
-        "SET pg_hint_plan.debug_print = off; "
-        f"SET statement_timeout = '{STATEMENT_TIMEOUT}'; "
-        f"EXPLAIN ({opts}) {sql}"
-    )
+    hint_sql = f"/*+ {hint} */ " if hint else ""
+    wrapped = f"EXPLAIN {hint_sql}({opts}) {sql}"
     out = subprocess.run(PSQL + ["-qAtX", "-v", "ON_ERROR_STOP=1", "-c", wrapped], capture_output=True, text=True)
     if out.returncode != 0:
         raise RuntimeError(out.stderr.strip()[:1200])
@@ -107,9 +96,11 @@ def rows_hint(aliases: list[str], rows: float) -> str:
     return f"Rows({inside} #{max(rows, 1.0):.6g})"
 
 
-def evaluate_case(case: dict) -> dict:
+def evaluate_case(case: dict, granularity: str) -> dict:
     sql = case["full_query_sql"]
     aliases = case["affected_branch"]["leaf_aliases"]
+    if granularity == "local":
+        aliases = sorted([case["title_alias"], case["kind_alias"]])
     wanted = set(aliases)
 
     default_an = run_explain(sql, analyze=True)
@@ -118,10 +109,16 @@ def evaluate_case(case: dict) -> dict:
     if not default_node or default_node.get("actual_rows") is None:
         raise RuntimeError("could not locate affected branch in default ANALYZE")
 
-    branch_pg = float(default_node["plan_rows"])
-    branch_actual = float(default_node["actual_rows"])
-    oasis_branch = branch_pg * (float(case["oasis_rows"]) / max(float(case["pg_local_rows"]), 1.0))
-    oracle_branch = branch_actual
+    if granularity == "local":
+        branch_pg = float(case["pg_local_rows"])
+        branch_actual = float(case["true_rows"])
+        oasis_branch = float(case["oasis_rows"])
+        oracle_branch = branch_actual
+    else:
+        branch_pg = float(default_node["plan_rows"])
+        branch_actual = float(default_node["actual_rows"])
+        oasis_branch = branch_pg * (float(case["oasis_rows"]) / max(float(case["pg_local_rows"]), 1.0))
+        oracle_branch = branch_actual
 
     methods = [
         ("default", None, branch_pg),
@@ -136,14 +133,13 @@ def evaluate_case(case: dict) -> dict:
         if name == "default":
             exp = default_an
         else:
-            hinted_sql = inject_hint(sql, hint)
-            exp = run_explain(hinted_sql, analyze=False)
+            exp = run_explain(sql, analyze=False, hint=hint)
             sig = json.dumps(plan_signature(exp["Plan"]))
             if sig in sig_to_runtime:
                 runtime = sig_to_runtime[sig]
                 analyzed = False
             else:
-                exp_an = run_explain(hinted_sql, analyze=True)
+                exp_an = run_explain(sql, analyze=True, hint=hint)
                 runtime = float(exp_an["Execution Time"])
                 sig_to_runtime[sig] = runtime
                 exp = exp_an
@@ -175,6 +171,7 @@ def evaluate_case(case: dict) -> dict:
 
     return {
         "query": case["query"],
+        "granularity": granularity,
         "aliases": aliases,
         "year_condition": case["year_condition"],
         "kind_condition": case["kind_condition"],
@@ -200,6 +197,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=8)
     ap.add_argument("--only", default="", help="Comma-separated query filenames to evaluate")
     ap.add_argument("--statement-timeout", default="20min")
+    ap.add_argument("--granularity", choices=["branch", "local"], default="branch")
     ap.add_argument("--psql", default=os.environ.get("PSQL_BIN", "psql"))
     ap.add_argument("--host", default=os.environ.get("PGHOST", ""))
     ap.add_argument("--port", default=os.environ.get("PGPORT", ""))
@@ -209,6 +207,13 @@ def main() -> None:
 
     global PSQL, STATEMENT_TIMEOUT
     STATEMENT_TIMEOUT = args.statement_timeout
+    pgoptions = os.environ.get("PGOPTIONS", "")
+    pg_hint_options = (
+        f" -c session_preload_libraries=pg_hint_plan"
+        f" -c pg_hint_plan.enable_hint=on"
+        f" -c statement_timeout={STATEMENT_TIMEOUT}"
+    )
+    os.environ["PGOPTIONS"] = pgoptions + pg_hint_options
     PSQL = [args.psql, "-d", args.db]
     if args.host:
         PSQL += ["-h", args.host]
@@ -231,7 +236,7 @@ def main() -> None:
     for case in selected:
         print(f"evaluating {case['query']} aliases={case['affected_branch']['leaf_aliases']}", flush=True)
         try:
-            result = evaluate_case(case)
+            result = evaluate_case(case, args.granularity)
             results.append(result)
             methods = {m["method"]: m for m in result["methods"]}
             print(

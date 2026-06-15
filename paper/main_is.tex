@@ -770,6 +770,60 @@ error to $1.1$--$2.0\times$. Where PostgreSQL's error far exceeds the true-margi
 report the conservative cross-column effect as the \textsc{avi}$\to$OASIS reduction, which is
 feedback repair alone.
 
+\subsection{From Better Estimates to Better Plans: a JOB Case Study}
+\label{sec:plan-level}
+Lower conjunctive Q-error is only useful if it changes what the optimizer \emph{does}. We
+therefore ask, directly on JOB, whether a feedback-repaired cross-column estimate can flip a
+join order and improve end-to-end runtime. Because JOB is a static benchmark, there is no
+``re-scan'' baseline; the natural reference is the \emph{oracle} plan obtained by injecting the
+\emph{true} cardinality, which upper-bounds what any repair could achieve. For each candidate
+query we locate the correlated sub-expression, compute PostgreSQL's estimate, OASIS's repaired
+estimate ($K{=}16$ feedback, no scan), and the true count, and inject each as a single
+\texttt{Rows} hint via \texttt{pg\_hint\_plan}, then measure the warm-cache plan and runtime.
+This is a \emph{targeted case study}, not a runtime benchmark: we report where the mechanism
+reaches end-to-end and, just as deliberately, where it does not.
+
+\begin{table}[t]
+  \centering\small
+  \caption{Plan-level injection on JOB (live PostgreSQL~14, warm cache). Each row injects the
+  corrected local conjunctive cardinality as a \texttt{Rows} hint. ``Local Q-err'' is the
+  estimate for the correlated sub-expression (PG\,$\to$\,OASIS); runtimes are
+  default\,/\,OASIS\,/\,oracle (oracle injects the true count).}
+  \label{tab:plan_level_job}
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{l r r r r}
+    \toprule
+    Query & Local Q-err & default & OASIS & oracle \\
+          & (PG$\to$OASIS) & (ms) & (ms) & (ms) \\
+    \midrule
+    \texttt{q00964} (\texttt{prod\_year}$\times$\texttt{kind}) & $61.1\to3.5$ & $1952$ & $\mathbf{25.5}$ & $22.5$ \\
+    \texttt{q00508} (empty-result case)                        & $3.3{\cdot}10^{13}\to1.0$ & $3443$ & $\mathbf{2877}$ & $2877$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The headline case is exactly the correlation behind Table~\ref{tab:crosscol_job}:
+\texttt{title.production\_year}$\times$\texttt{kind} (query \texttt{q00964},
+\texttt{production\_year}${}>{}$\texttt{2014} \textsc{and} \texttt{kind}${}={}$\texttt{movie}).
+PostgreSQL estimates the correlated branch at $7$ rows against a true $428$ ($61\times$ under);
+the feedback joint repairs it to $122$ ($3.5\times$), which is enough to change the join order.
+The resulting plan runs in $25.5$\,ms versus PostgreSQL's $1952$\,ms---a $76.7\times$
+speedup---and essentially matches the oracle plan's $22.5$\,ms (Table~\ref{tab:plan_level_job}).
+A second case (\texttt{q00508}) is an empty-result query that PostgreSQL mis-estimates at
+$3.3{\cdot}10^{13}$; the repair collapses it to the correct near-zero estimate for a smaller
+$1.2\times$ gain.
+
+We are equally explicit about the boundary. Across the broader sweep, OASIS's repair acts on the
+\emph{local} conjunctive selectivity, but several plan-critical errors live at a \emph{downstream
+join} cardinality that the local fix does not propagate to: in five queries the oracle hint flips
+the plan for a $6$--$8.8\times$ speedup while the OASIS-corrected local estimate does not reach
+the flip, and in one query the corrected estimate steered PostgreSQL to a slightly worse plan
+($2.1\times$ slower). The canonical $113$-query JOB sweep produced no plan changes at all. The
+honest reading is that feedback repair of cross-column statistics \emph{can} produce large,
+oracle-matching end-to-end gains when the dependence error sits on a join-order-critical base
+predicate, and that closing the residual gap requires propagating repair to intermediate join
+cardinalities---which our base-table statistics layer does not yet do (Section~\ref{sec:limitations}).
+
 \subsection{Downstream Optimizer Consumption}
 \label{sec:optimizer-facing}
 
@@ -1081,9 +1135,13 @@ learnable structure beyond the maximum-entropy default
 (Section~\ref{sec:single-column-results}), which is why we do not deploy a learned
 single-column prior. The exploitable opportunity is the cross-column joint, and even there
 OASIS repairs only the pairwise correlation that conjunctive feedback observes, not
-higher-order dependence or join-key skew, for which an external model remains necessary; the
-cross-column study is also an estimate-quality result, not yet an end-to-end planner
-injection. The TPC-H check shows only that calibrated statistics reproduce
+higher-order dependence or join-key skew, for which an external model remains necessary.
+The end-to-end JOB case study (Section~\ref{sec:plan-level}) shows that this repair can flip a
+join order for a large, oracle-matching runtime gain when the dependence error sits on a
+join-order-critical \emph{base} predicate, but a complementary boundary surfaced there: because
+the repair acts on base-table conjunctive selectivity, plan-critical errors that live at
+\emph{downstream join} cardinalities are not reached, so most JOB queries see no plan change.
+Propagating repair to intermediate join cardinalities is the clear next step. The TPC-H check shows only that calibrated statistics reproduce
 fresh-statistics execution time on one schema and six queries; runtime in general depends
 on executor behavior, caching, physical design, and cost-model calibration, and a stale
 mis-estimate can yield a coincidentally faster plan.

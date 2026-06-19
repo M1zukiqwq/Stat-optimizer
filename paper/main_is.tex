@@ -179,7 +179,8 @@ The contributions are:
   \item A \emph{cross-column feedback repair} for the residual error left by the
         attribute-value-independence assumption, cutting conjunctive-predicate Q-error by up
         to $31\%$ ($13.6\%$ aggregate) on real correlated columns, with the gain concentrated
-        where the columns are correlated (Section~\ref{sec:crosscol}).
+        where the columns are correlated and beating a faithful 2D STHoles baseline on every
+        pair (Section~\ref{sec:crosscol}).
   \item \emph{System-integration evidence}: a no-rescan statistics-maintenance middleware
         validated in a real PostgreSQL planner---feedback-maintained single-column statistics cut row Q-error
         from $27.8$ to $2.4$ and lift fresh-plan match from $56\%$ to $96\%$---plus targeted
@@ -681,21 +682,52 @@ true joint on a $G\times G$ grid ($G{=}12$); the AVI baseline is the outer produ
 from any marginal error. The feedback estimate is a two-dimensional max-entropy (IPF)
 projection that starts from the AVI grid and rescales it to match $K{=}16$ observed
 conjunctive rectangle masses---the natural two-dimensional analogue of the single-column
-ISOMER projection. Both are scored on held-out conjunctive rectangle predicates by
+ISOMER projection. As the most direct competitor we add a faithful two-dimensional
+STHoles~\cite{bruno2001stholes}, the canonical feedback-driven multidimensional histogram:
+it starts from a single uniform root bucket, drills a hole on each observed conjunctive
+rectangle, redistributes mass to match the observed count, and merges buckets under a
+budget---consuming the \emph{same} $K{=}16$ conjunctive observations as OASIS, but, as
+published, without a separately-maintained per-column marginal to seed from. All three are
+scored on held-out conjunctive rectangle predicates by
 geometric-mean Q-error. We use eight real correlated column pairs drawn from the same public
 datasets as the rest of the evaluation (Wine Quality, Bike Sharing, Forest/Covtype, Census,
 Power), spanning weak to strong correlation.
 
-\input{../experiments/results/crosscol_feedback_v1/table_crosscol_feedback.tex}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\columnwidth]{figures/fig_crosscol_heatmap.pdf}
+  \caption{Cross-column feedback repair on real correlated column pairs (rows ordered by
+  $|r|$): geometric-mean conjunctive-predicate Q-error ($\downarrow$; paler is better), each
+  cell annotated with its value, for independence with the \emph{true} marginals (AVI), a
+  faithful 2D STHoles~\cite{bruno2001stholes} learned from the same $K{=}16$ conjunctive
+  observations, and the OASIS feedback projection (2D max-entropy/IPF seeded from the
+  marginals). OASIS is lowest on every pair; STHoles, lacking a maintained marginal, barely
+  improves on AVI in aggregate ($1.538\!\to\!1.529$) and is worse than AVI on the
+  weakly-correlated pairs, whereas OASIS reaches $1.328$---a $13.6\%$ aggregate reduction over
+  AVI, concentrated where the columns are correlated.}
+  \label{fig:crosscol_heatmap}
+\end{figure}
 
-Table~\ref{tab:crosscol_feedback} reports the result, and it follows the structure the
+Figure~\ref{fig:crosscol_heatmap} reports the result, and it follows the structure the
 analysis predicts. Where the columns are essentially independent (Census \texttt{age}/\texttt{hours},
 $r{=}0.07$) feedback repair barely moves the estimate ($+3.9\%$): there is no correlation to
 recover and AVI is already right. Where the columns are correlated, feedback repair wins
 decisively---from $+7\%$ to $+31\%$ across the correlated pairs, largest on the strongly
 dependent \texttt{casual}/\texttt{cnt} pair, for a $13.6\%$ aggregate reduction in conjunctive
 Q-error over AVI. The gain follows the \emph{presence} of correlation---vanishing as columns
-approach independence---rather than scaling strictly with $|r|$. Unlike the single-column
+approach independence---rather than scaling strictly with $|r|$. Crucially, the most direct
+competitor does not capture this structure: 2D STHoles, learning the joint from the same
+conjunctive feedback but without a maintained marginal, improves only marginally over AVI in
+aggregate ($1.538\!\to\!1.529$) and is in fact \emph{worse} than AVI on the weakly-correlated
+pairs (Census, Forest \texttt{elev}/\texttt{roadway}, red-wine \texttt{density}/\texttt{alcohol}),
+where its from-scratch bucket structure overfits the few observed rectangles and leaves a wrong
+near-uniform density elsewhere. OASIS, seeding the same projection from the maintained marginals
+and injecting only the correlation the feedback reveals, reaches $1.328$ and is lowest on
+\emph{every} pair. The contrast sharpens the single-column lesson rather than contradicting it:
+in two dimensions the seed is what matters, and the right seed is the marginal the system already
+maintains near-optimally (Section~\ref{sec:single-column-results}), not a uniform that a
+standalone multidimensional histogram must rebuild from a handful of conjunctive observations.
+Unlike the single-column
 case, the cross-column information that independence discards is large and
 \emph{feedback-fillable}: conjunctive observations carry exactly the joint mass per-column
 statistics structurally lack. This is where feedback maintenance earns its keep for the
@@ -1079,7 +1111,9 @@ documented~\cite{poosala1997selectivity,leis2015good}; engines mitigate it with
 multi-dimensional or extended statistics built from scans, and STHoles~\cite{bruno2001stholes}
 builds multidimensional histograms from feedback. OASIS differs in maintaining both the
 marginal and, for correlated columns, the joint from query feedback alone---no rescan, with a
-safety router---and in characterizing when feedback suffices.
+safety router---and in characterizing when feedback suffices; empirically, seeding the joint
+projection from the maintained marginal outperforms a 2D STHoles built from the same feedback
+on every tested pair (Figure~\ref{fig:crosscol_heatmap}).
 
 \paragraph{What is and is not new}
 The maximum-entropy feedback projection itself is not new: in one dimension it is the

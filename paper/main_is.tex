@@ -87,28 +87,27 @@
 \address[inst1]{Xi'an Jiaotong University, Xi'an, China}
 
 \begin{abstract}
-Cost-based optimizers plan with column statistics that drift stale between refreshes and
-that assume columns are independent; both errors mislead the planner. Query execution
-already exposes them---for every filter predicate the executor reveals the selectivity the
-optimizer mis-estimated---so we ask how far query feedback alone, without rescanning the
-table, can maintain optimizer-facing statistics. We separate two regimes.
+Cost-based optimizers plan with column statistics that can drift stale between refreshes and
+that usually omit cross-column dependence. Query execution already exposes local selectivity
+errors, so we ask how far query feedback alone, without rescanning the table, can maintain the
+statistics a cost-based optimizer consumes.
 
-For a \emph{single} column, feedback determines the marginal up to a small free part, and a
-maximum-entropy projection (the classical ISOMER step) is already near-optimal: we give an
-identifiability condition for when feedback pins the marginal, and show on real datasets,
-against self-tuning histograms and a learned prior, that nothing beats the projection
-there---single-column repair is easy. The optimizer's larger residual error is the
-\emph{independence assumption} on correlated columns, and there feedback helps decisively: a
-feedback-driven joint repair cuts conjunctive-predicate Q-error by up to $31\%$ ($13.6\%$ in
-aggregate) over independence on real correlated columns, the gain concentrated where
-the columns are correlated.
+The answer splits into two regimes. For a single column, the classical maximum-entropy
+feedback projection (ISOMER/IPF) is already the right tool: we give an identifiability
+condition for when feedback pins the marginal, and on real datasets find that neither
+self-tuning histograms nor a learned prior gives a stable material gain once this projection
+is applied. The optimizer's larger residual error is cross-column independence. There,
+conjunctive feedback supplies the missing joint mass: a feedback-repaired joint reduces
+conjunctive-predicate Q-error by up to $31\%$ ($13.6\%$ in aggregate) over independence on real
+correlated columns, with gains concentrated on correlated pairs.
 
-We package this as OASIS, a statistics-layer
-middleware that maintains optimizer statistics from query feedback between full
-\texttt{ANALYZE} refreshes. Injected into a real PostgreSQL planner, feedback-maintained
-single-column statistics cut row Q-error from $27.8$ to $2.4$ and lift fresh-plan match from
-$56\%$ to $96\%$ without a table scan, and the maintained marginals stay safe for
-composition and join estimators to consume.
+We package these findings as OASIS, a statistics-layer middleware that maintains
+optimizer-facing statistics between full \texttt{ANALYZE} refreshes. In a PostgreSQL planner
+injection study, feedback-maintained single-column statistics reduce row Q-error from $27.8$
+to $2.4$ and raise fresh-plan match from $56\%$ to $96\%$ without a table scan. Targeted JOB
+row-hint checks use runtime only as a mechanism probe: they show when a repaired
+base-predicate cardinality reaches the planner's join-order decision, and also expose the
+boundary that local pairwise repair does not automatically fix downstream join cardinalities.
 \end{abstract}
 
 \begin{keyword}
@@ -129,81 +128,64 @@ most-common-value lists, and density summaries
 \cite{ioannidis1993histogram,poosala1997selectivity,postgresqlPlannerStats,postgresqlRowEstimation},
 refreshed periodically by \texttt{ANALYZE}-style procedures that read a full or
 sampled view of the table~\cite{postgresqlAnalyze}. This maintenance strategy is
-simple and robust, but it leaves a persistent staleness gap: tables keep receiving
-inserts, deletes, and updates while the optimizer plans with the last statistics
-snapshot. As the gap widens, stale histograms induce systematic selectivity errors
-that propagate through the cost model into poor plans
-\cite{leis2015good,moerkotte2009preventing,han2021cardinality,lee2023impact}. A second,
-orthogonal error is structural rather than temporal: per-column statistics carry no
-cross-column information, so the optimizer falls back on the attribute-value-independence
-assumption and systematically mis-estimates conjunctions over correlated columns
+simple and robust, but it leaves two persistent gaps. The first is temporal: tables keep
+receiving inserts, deletes, and updates while the optimizer plans from the last statistics
+snapshot, so stale histograms induce selectivity errors that propagate into poor plans
+\cite{leis2015good,moerkotte2009preventing,han2021cardinality,lee2023impact}. The second is
+structural: per-column statistics carry no cross-column information, so optimizers often fall
+back on attribute-value independence and mis-estimate conjunctions over correlated columns
 \cite{poosala1997selectivity,leis2015good}.
 
-A DBMS already obtains the signal to repair both errors while executing ordinary queries.
-For a filter predicate, the optimizer's estimated and the executor's observed selectivity
-expose a local discrepancy between the stale statistics and the current data; for a
-conjunction over several columns, the same feedback reveals the joint selectivity the
-independence assumption got wrong. Feedback-driven self-tuning histograms turn such
-observations into statistics updates---STHoles, SASH, and ISOMER are the canonical examples
-\cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}---and ISOMER makes
-the principle explicit: among all distributions consistent with the observed feedback, choose
-the \emph{maximum-entropy} one---the least-committed completion of the part feedback leaves
-undetermined.
+Ordinary query execution already exposes both gaps. A completed filter predicate reveals the
+selectivity the optimizer mis-estimated; a completed conjunction reveals the joint selectivity
+that independence got wrong. Feedback-driven self-tuning histograms such as STHoles, SASH,
+and ISOMER use such observations to update statistics
+\cite{aboulnaga1999self,bruno2001stholes,lim2003sash,markl2007consistent}. ISOMER's principle
+is especially important here: among distributions consistent with feedback, choose the
+maximum-entropy one, the least-committed completion of what feedback leaves undetermined.
 
 This paper asks a deployment question: \emph{how far can query feedback alone, with no table
-rescan, maintain the statistics a cost-based optimizer actually plans with?} The answer
-splits cleanly into two regimes, and that split is the organizing idea.
+rescan, maintain the statistics a cost-based optimizer actually plans with?} The answer is a
+dichotomy. For single-column histograms, the classical maximum-entropy projection is already
+near-saturated: we give a rank condition for when feedback pins the marginal, and on real
+datasets find that learned and self-tuning alternatives give no stable material edge once the
+same projection is applied. OASIS therefore does \emph{not} claim a new single-column repair
+operator; in one dimension it intentionally uses the ISOMER/IPF projection. The opportunity
+lies in the residual error that one-dimensional statistics cannot touch: cross-column
+independence. There, conjunctive feedback observes the missing joint mass directly, and a
+two-dimensional feedback projection cuts conjunctive-predicate Q-error by up to $31\%$
+($13.6\%$ in aggregate) over independence on real correlated columns
+(Section~\ref{sec:crosscol}).
 
-\emph{Single columns are easy.} An equi-depth histogram with $B$ buckets has only $B-1$ free
-interior boundaries; a feedback window pins the cumulative distribution at the observed
-boundaries and leaves a small free part. We make this precise with an identifiability
-condition (Section~\ref{sec:mechanism}) for when feedback determines the marginal, and we
-find empirically---on real datasets, against self-tuning histograms and against a prior
-trained directly on the optimizer's error---that once the feedback projection is applied,
-\emph{nothing beats the maximum-entropy completion}: a learned model gives no edge over the
-classical ISOMER step. Single-column repair therefore needs no machine learning; the
-principled projection suffices, and we prove and measure when it does.
-
-\emph{Independence is the bottleneck.} The optimizer's larger residual error is the
-independence assumption introduced above. Maximum entropy over a single column cannot touch
-it, but conjunctive feedback can---it directly observes the joint mass independence gets
-wrong. A feedback-driven joint repair (a two-dimensional max-entropy projection onto
-observed conjunctive masses) cuts conjunctive-predicate Q-error by up to $31\%$---$13.6\%$ in
-aggregate---over the independence assumption on real correlated columns, with the gain
-concentrated where the columns are correlated (Section~\ref{sec:crosscol}). This is where feedback
-maintenance earns its keep for the optimizer.
-
-The resulting system is OASIS, a
-statistics-layer middleware that maintains optimizer statistics from query feedback between
-full \texttt{ANALYZE} refreshes, with no base-table rescan. A \emph{conversion layer} maps
-native engine statistics to a canonical distribution view and back
-(Section~\ref{sec:mcv-adapter}); a \emph{repair layer} applies the feedback-consistency
-projection---to a single marginal, and, for correlated columns, to the joint
-(Sections~\ref{sec:stage2}, \ref{sec:crosscol}); and a \emph{safety layer} routes among
-candidate corrections on a deployment-visible signal so an imperfect correction never
-degrades below the maximum-entropy default (Section~\ref{sec:stage2}). Because the correction
-is inserted at the statistics layer, the optimizer's search and cost model are untouched.
-This design yields four contributions:
+We package these findings as OASIS, a statistics-layer middleware that maintains optimizer
+statistics from query feedback between full \texttt{ANALYZE} refreshes, with no base-table
+rescan. A conversion layer maps native engine statistics to a canonical distribution view
+and back (Section~\ref{sec:mcv-adapter}); a repair layer applies feedback-consistency
+projection to a marginal or, when conjunctive feedback is available, to the joint
+(Sections~\ref{sec:stage2}, \ref{sec:crosscol}); and a safety layer routes among candidates
+using a deployment-visible feedback residual (Section~\ref{sec:stage2}). Because OASIS
+operates at the statistics layer, the optimizer's search and cost model are left unchanged.
+The contributions are:
 \begin{itemize}
-  \item An \emph{identifiability} analysis of feedback-driven repair: a rank condition
+  \item An \emph{identifiability diagnosis} of feedback-driven repair: a rank condition
         (Proposition~\ref{prop:pinned}) for when query feedback pins the optimizer-relevant
         statistic, and when it leaves a free part no consistent method can resolve from
         feedback alone (Sections~\ref{sec:problem}, \ref{sec:mechanism}).
-  \item A clean \emph{dichotomy}, validated on real data: single-column repair is
-        easy---the maximum-entropy projection is near-optimal, and a learned prior and the
-        self-tuning histograms STHoles and QuickSel-H give no edge over it
-        (Section~\ref{sec:single-column-results})---whereas the independence assumption is
-        the dominant residual optimizer error.
-  \item A \emph{feedback-driven independence repair} that beats the
-        attribute-value-independence assumption by up to $31\%$ ($13.6\%$ aggregate) on real
-        correlated columns, with the gain concentrated where the columns are correlated
-        (Section~\ref{sec:crosscol}).
-  \item \emph{OASIS}, a no-rescan statistics-maintenance middleware validated in a real
-        PostgreSQL planner---feedback-maintained single-column statistics cut row Q-error
-        from $27.8$ to $2.4$ and lift fresh-plan match from $56\%$ to $96\%$---with the
-        maintained marginals shown safe for composition and join estimators to consume and a
-        residual-gated router that never degrades below the maximum-entropy default
-        (Section~\ref{sec:optimizer-facing}).
+  \item A \emph{single-column negative result}, validated on real data: once feedback is
+        projected, the maximum-entropy completion is near-optimal, and a learned prior and
+        the self-tuning histograms STHoles and QuickSel-H give no stable edge over it
+        (Section~\ref{sec:single-column-results}). In this regime OASIS is intentionally
+        ISOMER-like; the equality is the point, not a failure.
+  \item A \emph{cross-column feedback repair} for the residual error left by the
+        attribute-value-independence assumption, cutting conjunctive-predicate Q-error by up
+        to $31\%$ ($13.6\%$ aggregate) on real correlated columns, with the gain concentrated
+        where the columns are correlated (Section~\ref{sec:crosscol}).
+  \item \emph{System-integration evidence}: a no-rescan statistics-maintenance middleware
+        validated in a real PostgreSQL planner---feedback-maintained single-column statistics cut row Q-error
+        from $27.8$ to $2.4$ and lift fresh-plan match from $56\%$ to $96\%$---plus targeted
+        JOB row-hint checks showing when a repaired cross-column estimate reaches the planner,
+        and where local pairwise repair does not yet propagate
+        (Sections~\ref{sec:plan-level}, \ref{sec:optimizer-facing}).
 \end{itemize}
 
 \section{Background and Problem Formulation}
@@ -365,11 +347,11 @@ The \emph{conversion layer} (L1, Section~\ref{sec:mcv-adapter}) maps the engine'
 statistics object to a canonical distribution view and back, so the rest of the system is
 engine-independent. The \emph{repair layer} (L2) applies the feedback-consistency projection
 that maintains the statistic---to a single marginal (Section~\ref{sec:stage2}) and, for
-correlated columns, to the joint (Section~\ref{sec:crosscol}); it is training-free---no model
-and no offline training (we include a learned prior only as a baseline and find it gives no
-edge, Section~\ref{sec:single-column-results}). The \emph{safety layer} (L3, Section~\ref{sec:stage2}) routes among
-candidate corrections on a deployment-visible signal so an imperfect correction never
-degrades below the maximum-entropy default.
+correlated columns, to the joint (Section~\ref{sec:crosscol}). For one dimension this is the
+classical ISOMER/IPF projection; OASIS uses it because the identifiability and empirical
+results show that no more elaborate single-column prior is needed. The \emph{safety layer}
+(L3, Section~\ref{sec:stage2}) routes among candidate corrections on a deployment-visible
+feedback residual.
 
 When the optimizer requests a histogram, the request passes down through the three
 layers and back (Figure~\ref{fig:architecture}). Two integration points
@@ -392,9 +374,9 @@ collection adds only bounded per-conjunct bookkeeping.
   \label{fig:architecture}
 \end{figure}
 
-\emph{OASIS} names the approach---feedback-consistency repair guarded by a safety
-router---and in its default deployed form applies the hard projection, with the residual-gated
-Router (detailed in Section~\ref{sec:stage2}) as the fallback. The external baselines are the
+\emph{OASIS} names the approach---identifiability-guided feedback repair at the statistics
+layer, with the classical projection used where it is already sufficient and a joint
+projection used where independence is the residual error. The external baselines are the
 stale histogram and ISOMER (the maximum-entropy projection initialized from stale), together
 with the self-tuning histograms STHoles and QuickSel-H.
 
@@ -585,9 +567,9 @@ structurally cannot (Section~\ref{sec:crosscol}). Finally we hand the corrected 
 real downstream consumers---composition estimators, a join kernel, and a live PostgreSQL
 planner---and ask whether they stay safe (Section~\ref{sec:optimizer-facing}). The evaluation
 is deliberately \emph{planner-facing}: we report the corrected statistics object together with
-the row estimates and plan shapes a real optimizer derives from it, and use runtime only as a
-single narrow TPC-H reality check that calibrated statistics track fresh-statistics behavior,
-not as a claim of wall-clock superiority over stale statistics.
+the row estimates and plan shapes a real optimizer derives from it, and use runtime only in
+narrow validation checks---a targeted JOB plan-level case study and a TPC-H sanity check---not
+as a broad claim of wall-clock superiority over stale statistics.
 
 Unless stated otherwise, every feedback-driven method consumes the same observation budget
 $K{=}16$ and emits corrected quantiles on the same $B{=}10$ grid; where a drift intensity $q$
@@ -770,59 +752,73 @@ error to $1.1$--$2.0\times$. Where PostgreSQL's error far exceeds the true-margi
 report the conservative cross-column effect as the \textsc{avi}$\to$OASIS reduction, which is
 feedback repair alone.
 
-\subsection{From Better Estimates to Better Plans: a JOB Case Study}
+\subsection{Mechanism Check: Does a Repaired Local Estimate Reach the Planner?}
 \label{sec:plan-level}
-Lower conjunctive Q-error is only useful if it changes what the optimizer \emph{does}. We
-therefore ask, directly on JOB, whether a feedback-repaired cross-column estimate can flip a
-join order and improve end-to-end runtime. Because JOB is a static benchmark, there is no
-``re-scan'' baseline; the natural reference is the \emph{oracle} plan obtained by injecting the
-\emph{true} cardinality, which upper-bounds what any repair could achieve. For each candidate
-query we locate the correlated sub-expression, compute PostgreSQL's estimate, OASIS's repaired
-estimate ($K{=}16$ feedback, no scan), and the true count, and inject each as a single
-\texttt{Rows} hint via \texttt{pg\_hint\_plan}, then measure the warm-cache plan and runtime.
-This is a \emph{targeted case study}, not a runtime benchmark: we report where the mechanism
-reaches end-to-end and, just as deliberately, where it does not.
+Lower conjunctive Q-error matters only if the repaired estimate reaches a planner decision.
+We therefore use JOB as a \emph{mechanism check}, not as a runtime benchmark. Because JOB is a
+static benchmark, there is no natural ``post-refresh'' stream or fresh \texttt{ANALYZE}
+baseline; instead we use a narrow oracle-cardinality reference: inject the true local
+cardinality with \texttt{pg\_hint\_plan}, and ask whether the OASIS-repaired local estimate
+induces the same plan behavior. Warm-cache runtime is reported only to confirm which plan was
+selected and whether the repaired estimate follows the oracle reference, not to claim that
+updated statistics should always beat stale statistics.
+
+For each candidate query we locate the correlated sub-expression, compute PostgreSQL's
+estimate, OASIS's repaired estimate ($K{=}16$ feedback, no scan), and the true count, and inject
+each as a single \texttt{Rows} hint. To make the boundary visible, we swept $974$ JOB variants,
+found $210$ title--kind and $300$ movie-companies local candidates, and completed $236$
+\texttt{Rows}-hint evaluations ($17$ timeouts/errors). The \texttt{aka\_title} and
+\texttt{cast\_info} variants in this sweep did not contain clean local two-predicate cases for
+the tested pairs.
 
 \begin{table}[t]
   \centering\small
-  \caption{Plan-level injection on JOB (live PostgreSQL~14, warm cache). Each row injects the
-  corrected local conjunctive cardinality as a \texttt{Rows} hint. ``Local Q-err'' is the
-  estimate for the correlated sub-expression (PG\,$\to$\,OASIS); runtimes are
-  default\,/\,OASIS\,/\,oracle (oracle injects the true count).}
+  \caption{Planner mechanism check and boundary sweep on JOB (live PostgreSQL~14, warm cache).
+  Rows inject local or branch cardinalities via \texttt{pg\_hint\_plan}. ``Local Q-err'' is
+  PostgreSQL$\to$OASIS on the repaired conjunctive sub-expression; runtimes are
+  default/OASIS/oracle, where oracle injects the true count. Runtime is a plan-behavior
+  diagnostic, not a claim that refreshed statistics always beat stale plans.}
   \label{tab:plan_level_job}
-  \setlength{\tabcolsep}{5pt}
-  \begin{tabular}{l r r r r}
+  \setlength{\tabcolsep}{3.5pt}
+  \begin{adjustbox}{max width=\columnwidth}
+  \begin{tabular}{l l r r r r l}
     \toprule
-    Query & Local Q-err & default & OASIS & oracle \\
-          & (PG$\to$OASIS) & (ms) & (ms) & (ms) \\
+    Case & Target & Local Q-err & default & OASIS & oracle & Takeaway \\
+         &        & (PG$\to$OASIS) & (ms) & (ms) & (ms) & \\
     \midrule
-    \texttt{q00964} (\texttt{prod\_year}$\times$\texttt{kind}) & $61.1\to3.5$ & $1952$ & $\mathbf{25.5}$ & $22.5$ \\
-    \texttt{q00508} (empty-result case)                        & $3.3{\cdot}10^{13}\to1.0$ & $3443$ & $\mathbf{2877}$ & $2877$ \\
+    \texttt{q00964} & \texttt{Rows(kt t)} & $61.1\to3.5$ & $1952$ & $25.5$ & $22.5$ & follows oracle reference \\
+    \texttt{q00508} & local zero case & huge$\to1.0$ & $3443$ & $2877$ & $2877$ & zero-count boundary \\
+    \texttt{q00706} & \texttt{Rows(kt t)} & $4.0\to1.1$ & $956$ & $2004$ & $2004$ & oracle is slower \\
+    5 title-kind cases & downstream branch & $\approx3.0\to\approx1.0$ & $1815$--$2047$ & same & $230$--$325$ & local fix insufficient \\
+    movie-comp. sweep & local candidates & varied & same & same & same & no plan change \\
     \bottomrule
   \end{tabular}
+  \end{adjustbox}
 \end{table}
 
-The headline case is exactly the correlation behind Table~\ref{tab:crosscol_job}:
-\texttt{title.production\_year}$\times$\texttt{kind} (query \texttt{q00964},
-\texttt{production\_year}${}>{}$\texttt{2014} \textsc{and} \texttt{kind}${}={}$\texttt{movie}).
-PostgreSQL estimates the correlated branch at $7$ rows against a true $428$ ($61\times$ under);
-the feedback joint repairs it to $122$ ($3.5\times$), which is enough to change the join order.
-The resulting plan runs in $25.5$\,ms versus PostgreSQL's $1952$\,ms---a $76.7\times$
-speedup---and essentially matches the oracle plan's $22.5$\,ms (Table~\ref{tab:plan_level_job}).
-A second case (\texttt{q00508}) is an empty-result query that PostgreSQL mis-estimates at
-$3.3{\cdot}10^{13}$; the repair collapses it to the correct near-zero estimate for a smaller
-$1.2\times$ gain.
+Table~\ref{tab:plan_level_job} should therefore be read as a plan-behavior check. In
+\texttt{q00964}, the repaired estimate moves a correlated
+\texttt{title.production\_year}$\times$\texttt{kind} branch from PostgreSQL's $7$ rows toward
+the true $428$ rows ($122$ after repair), and the induced plan follows the oracle-cardinality
+reference. In \texttt{q00508}, a local zero-count boundary case similarly follows the oracle
+reference, but its numerically huge Q-error is not core evidence. Conversely,
+\texttt{q00706} is the useful cautionary case: the repaired estimate again follows the oracle
+reference, yet that reference plan is slower than PostgreSQL's stale-statistics choice under
+this warm-cache run. This is expected in a cost-based optimizer---refreshing statistics or
+injecting a truer local cardinality changes the optimizer's modeled decision, but does not
+guarantee that the resulting plan beats the stale plan on wall-clock time.
 
 We are equally explicit about the boundary. Across the broader sweep, OASIS's repair acts on the
 \emph{local} conjunctive selectivity, but several plan-critical errors live at a \emph{downstream
-join} cardinality that the local fix does not propagate to: in five queries the oracle hint flips
-the plan for a $6$--$8.8\times$ speedup while the OASIS-corrected local estimate does not reach
-the flip, and in one query the corrected estimate steered PostgreSQL to a slightly worse plan
-($2.1\times$ slower). The canonical $113$-query JOB sweep produced no plan changes at all. The
-honest reading is that feedback repair of cross-column statistics \emph{can} produce large,
-oracle-matching end-to-end gains when the dependence error sits on a join-order-critical base
-predicate, and that closing the residual gap requires propagating repair to intermediate join
-cardinalities---which our base-table statistics layer does not yet do (Section~\ref{sec:limitations}).
+join} cardinality that the local fix does not propagate to: in five queries the oracle hint
+changes the downstream branch while the OASIS-corrected local estimate does not reach the flip,
+and in one query the corrected estimate steered PostgreSQL to a slower oracle-reference plan.
+The movie-companies sweep likewise found no plan change. The
+honest reading is that feedback repair of cross-column statistics can reach the optimizer when
+the dependence error sits on a join-order-critical base predicate, but that the broader goal is
+agreement with the fresh/oracle reference rather than beating stale wall-clock time. Closing the
+residual gap requires propagating repair to intermediate join cardinalities---which our
+base-table statistics layer does not yet do (Section~\ref{sec:limitations}).
 
 \subsection{Downstream Optimizer Consumption}
 \label{sec:optimizer-facing}
@@ -835,11 +831,12 @@ Each rung adds exactly one thing the previous cannot: six composition estimators
 is \emph{consumer-agnostic} (Section~\ref{sec:composition-family}); a bilinear FactorJoin kernel
 is the \emph{nonlinear stress case}, where an unprojected correction turns harmful
 (Section~\ref{sec:factorjoin}); a live PostgreSQL planner is the \emph{real-system} test on row
-estimates and plan shapes (Section~\ref{sec:postgres-planner}); and TPC-H is the lone
-\emph{runtime} reality check (Section~\ref{sec:tpch-runtime}). Because the OASIS and
+estimates and plan shapes (Section~\ref{sec:postgres-planner}); and TPC-H is a separate
+\emph{runtime} sanity check (Section~\ref{sec:tpch-runtime}). Because the OASIS and
 \emph{Unproj.\ prior} columns differ only in the projection, every rung also isolates how much
 of the benefit is the projection rather than the prior. The primary evidence is estimate quality and
-plan \emph{shape}; runtime enters only in the final, deliberately narrow check.
+plan \emph{shape}; runtime appears only in the targeted JOB case study and the deliberately
+narrow TPC-H check.
 
 \subsubsection{Composition-Family Generalization}
 \label{sec:composition-family}
@@ -992,12 +989,13 @@ $28.453$ averaged over configurations versus $27.768$ pooled.)
 An unprojected correction reduces row Q-error to $3.703$ but introduces new plan deviations
 in $2.3\%$ of cases. The feedback projection (OASIS) reduces row Q-error to $2.362$, matches the fresh plan on
 $95.9\%$ of queries, recovers $92.1\%$ of stale/fresh disagreements, and cuts new
-deviations to $1.1\%$. Crucially, OASIS ($2.362$) and ISOMER ($2.374$) are near-identical here---the rank mechanism,
-not a disappointment: these planner-facing windows are dense enough to pin the active
-constraints (Section~\ref{sec:mechanism}), so hard projection converges to nearly the same
-marginal whichever prior seeds it, and the Router selects ISOMER on all twelve configurations.
-On a real optimizer, then, feedback maintenance restores near-fresh plans with no table scan,
-and the projection alone suffices.
+deviations to $1.1\%$. Crucially, OASIS ($2.362$) and ISOMER ($2.374$) are near-identical here.
+This equality is the point: these planner-facing windows are dense enough to pin the active
+single-column constraints (Section~\ref{sec:mechanism}), so any prior closed by the same hard
+projection collapses to the same marginal, and the Router selects ISOMER on all twelve
+configurations. The system lesson is therefore not that OASIS beats ISOMER on single columns,
+but that a deployable statistics layer should use the classical projection there and spend
+its modeling budget on cross-column structure.
 
 
 \subsubsection{TPC-H DML-Drift Runtime Sanity Check}
@@ -1083,6 +1081,18 @@ builds multidimensional histograms from feedback. OASIS differs in maintaining b
 marginal and, for correlated columns, the joint from query feedback alone---no rescan, with a
 safety router---and in characterizing when feedback suffices.
 
+\paragraph{What is and is not new}
+The maximum-entropy feedback projection itself is not new: in one dimension it is the
+classical ISOMER step, and OASIS intentionally uses that step rather than replacing it. The
+new contribution is the boundary around it. Proposition~\ref{prop:pinned} identifies when
+feedback leaves no room for a prior to matter; the real-data experiments show that even below
+full saturation, single-column priors and learned fits do not give a stable edge over the
+least-committed completion; and the remaining exploitable signal is cross-column, where
+conjunctive feedback observes the joint mass the optimizer's per-column statistics discard.
+Thus the comparison with ISOMER is not framed as a single-column win. It is a diagnosis:
+use ISOMER-like projection for marginals, and use feedback to repair the independence
+assumption where the old single-column interface cannot.
+
 \paragraph{Learned cardinality estimation}
 Learned estimators such as NeuroCard, Naru, DeepDB, FACE, MSCN, FLAT, and Iris predict
 cardinalities from learned density or representation models
@@ -1113,7 +1123,8 @@ statistics object itself, and the two are complementary.
 
 The most important boundary is external validity. The cross-column repair is validated on
 the standard Join Order Benchmark against a live PostgreSQL planner
-(Section~\ref{sec:crosscol}), but on a sampled conjunctive-predicate suite rather than an
+(Sections~\ref{sec:crosscol}--\ref{sec:plan-level}), but mostly through sampled
+conjunctive-predicate estimates plus one targeted plan-level case study rather than a broad
 end-to-end production query workload with its own statistics-refresh history; the latter
 remains untested. This boundary is partly structural. To our knowledge no public dataset of production statistics-refresh histories
 exists, and the self-tuning-histogram line we build on and compare against---STHoles,
@@ -1122,7 +1133,8 @@ than on such histories. We therefore adopt the evaluation regime of the prior ar
 climb a deliberate ladder of increasing realism on top of it: controlled drift families over
 real data columns; injection into a \emph{real}
 PostgreSQL optimizer through \texttt{pg\_statistic}, scored on \texttt{EXPLAIN} estimates
-and plan shapes; and a cross-schema TPC-H check---driven by benchmark-style
+and plan shapes; a targeted JOB \texttt{Rows}-hint case study that tests whether one repaired
+cross-column estimate can cross the optimizer boundary; and a cross-schema TPC-H check---driven by benchmark-style
 insert/update/delete refresh streams---that reuses the \emph{same} pretrained prior
 with no retraining. Each rung is a
 genuine step beyond the baselines' original validation, though none is yet a production refresh
@@ -1136,11 +1148,11 @@ learnable structure beyond the maximum-entropy default
 single-column prior. The exploitable opportunity is the cross-column joint, and even there
 OASIS repairs only the pairwise correlation that conjunctive feedback observes, not
 higher-order dependence or join-key skew, for which an external model remains necessary.
-The end-to-end JOB case study (Section~\ref{sec:plan-level}) shows that this repair can flip a
-join order for a large, oracle-matching runtime gain when the dependence error sits on a
-join-order-critical \emph{base} predicate, but a complementary boundary surfaced there: because
-the repair acts on base-table conjunctive selectivity, plan-critical errors that live at
-\emph{downstream join} cardinalities are not reached, so most JOB queries see no plan change.
+The JOB mechanism check (Section~\ref{sec:plan-level}) shows that this repair can reach a
+join-order decision when the dependence error sits on a join-order-critical \emph{base}
+predicate, but a complementary boundary surfaced there: because the repair acts on base-table
+conjunctive selectivity, plan-critical errors that live at \emph{downstream join}
+cardinalities are not reached, so most JOB queries see no plan change.
 Propagating repair to intermediate join cardinalities is the clear next step. The TPC-H check shows only that calibrated statistics reproduce
 fresh-statistics execution time on one schema and six queries; runtime in general depends
 on executor behavior, caching, physical design, and cost-model calibration, and a stale
@@ -1157,8 +1169,8 @@ regression if one arose. A plan-shape-aware gate is left to future work.
 \label{sec:conclusion}
 
 OASIS maintains cost-based optimizer statistics from query feedback, with no table rescan
-and no change to the optimizer. Its organizing finding is a dichotomy. For a single column,
-feedback nearly determines the marginal: we give an identifiability condition
+and no change to the optimizer. Its organizing finding is a dichotomy, not a new
+single-column histogram algorithm. For a single column, feedback nearly determines the marginal: we give an identifiability condition
 (Proposition~\ref{prop:pinned}) for when feedback pins it, and show on held-out \emph{real}
 datasets that the maximum-entropy projection (the classical ISOMER step) is already
 near-optimal---a learned prior and the self-tuning histograms STHoles and QuickSel-H give no
@@ -1172,7 +1184,11 @@ Packaged as a statistics-layer middleware and injected into a real PostgreSQL pl
 feedback-maintained single-column statistics cut row Q-error from $27.8$ to $2.4$ and lift
 fresh-plan match from $56\%$ to $96\%$ without a table scan, and the maintained marginals
 stay safe for composition and join estimators to consume, guarded by a residual-gated router
-that never degrades below the maximum-entropy default. OASIS targets the two structural errors in an optimizer's statistics---staleness and
+that never degrades below the maximum-entropy default on feedback residual. Targeted JOB
+row-hint checks further verify the missing causal link for cross-column repair: in selected
+cases a repaired base-predicate cardinality reaches the planner and follows the oracle
+cardinality reference, while the broader sweep shows that local pairwise repair does not
+automatically propagate to downstream join-cardinality errors. OASIS targets the two structural errors in an optimizer's statistics---staleness and
 independence---using the feedback ordinary queries already produce, with no rescan.
 
 \section*{Declarations}

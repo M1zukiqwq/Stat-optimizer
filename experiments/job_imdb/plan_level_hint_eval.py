@@ -100,7 +100,10 @@ def evaluate_case(case: dict, granularity: str) -> dict:
     sql = case["full_query_sql"]
     aliases = case["affected_branch"]["leaf_aliases"]
     if granularity == "local":
-        aliases = sorted([case["title_alias"], case["kind_alias"]])
+        if "local_hint_aliases" in case:
+            aliases = sorted(case["local_hint_aliases"])
+        else:
+            aliases = sorted([case["title_alias"], case["kind_alias"]])
     wanted = set(aliases)
 
     default_an = run_explain(sql, analyze=True)
@@ -171,10 +174,12 @@ def evaluate_case(case: dict, granularity: str) -> dict:
 
     return {
         "query": case["query"],
+        "pair": case.get("pair", "title.production_year/kind_id"),
         "granularity": granularity,
         "aliases": aliases,
-        "year_condition": case["year_condition"],
-        "kind_condition": case["kind_condition"],
+        "year_condition": case.get("year_condition"),
+        "kind_condition": case.get("kind_condition"),
+        "predicate_summary": case.get("predicate_summary"),
         "local": {
             "true_rows": case["true_rows"],
             "pg_rows": case["pg_local_rows"],
